@@ -103,13 +103,40 @@
     },
     {
       "parameters": {
-        "jsCode": "const whois = $('WHOIS').first().json;\nconst dns = $('DNS').first().json;\nconst ssl = $('SSL').first().json;\nconst brand = $('Brand Similarity').first().json;\nconst virustotal = $('VirusTotal').first().json;\nreturn [{ json: {\n  domain_age_days: whois.domain_age_days ?? null,\n  whois: { ...(whois.whois ?? {}), ssl: ssl.ssl ?? {} },\n  dns: dns.dns ?? {},\n  ssl_valid: ssl.ssl_valid ?? null,\n  brand_similarity: brand.brand_similarity ?? {},\n  virustotal: virustotal.virustotal ?? {}\n} }];"
+        "jsCode": "const request = $('Webhook').first().json.body;\nconst whois = $('WHOIS').first().json;\nconst dns = $('DNS').first().json;\nconst ssl = $('SSL').first().json;\nconst brand = $('Brand Similarity').first().json;\nconst virustotal = $('VirusTotal').first().json;\nreturn [{ json: {\n  url: request.url,\n  domain: request.domain,\n  domain_age_days: whois.domain_age_days ?? null,\n  whois: { ...(whois.whois ?? {}), ssl: ssl.ssl ?? {} },\n  dns: dns.dns ?? {},\n  ssl_valid: ssl.ssl_valid ?? null,\n  brand_similarity: brand.brand_similarity ?? {},\n  virustotal: virustotal.virustotal ?? {}\n} }];"
       },
       "id": "0655b84b-68d8-42ec-b1d4-c570f9d99bb2",
       "name": "Combine Signals",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [620, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/ai-explanation",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Combine Signals').item.json }}",
+        "options": {"timeout": 60000}
+      },
+      "id": "18791136-cb26-4a38-b309-97f730372e06",
+      "name": "AI Explanation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const signals = $('Combine Signals').first().json;\nconst ai = $('AI Explanation').first().json;\nreturn [{ json: { ...signals, ai_explanation: ai.ai_explanation ?? null, ai_error: ai.ai_error ?? null, risk: ai.risk, status: ai.status, reasons: ai.reasons } }];"
+      },
+      "id": "219112f5-483c-4211-9857-c0dc9ca9cb35",
+      "name": "Finalize Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 120]
     },
     {
       "parameters": {
@@ -121,7 +148,7 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [860, 120]
+      "position": [1340, 120]
     }
   ],
   "pinData": {},
@@ -132,7 +159,9 @@
     "SSL": {"main": [[{"node": "Brand Similarity", "type": "main", "index": 0}]]},
     "Brand Similarity": {"main": [[{"node": "VirusTotal", "type": "main", "index": 0}]]},
     "VirusTotal": {"main": [[{"node": "Combine Signals", "type": "main", "index": 0}]]},
-    "Combine Signals": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
+    "Combine Signals": {"main": [[{"node": "AI Explanation", "type": "main", "index": 0}]]},
+    "AI Explanation": {"main": [[{"node": "Finalize Result", "type": "main", "index": 0}]]},
+    "Finalize Result": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
   },
   "active": false,
   "settings": {"executionOrder": "v1"},

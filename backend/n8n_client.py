@@ -44,6 +44,7 @@ def collect_signals_via_n8n(url: str, domain: str) -> CollectedSignals:
             whois_data=data.get("whois", {}),
             virustotal_data=data.get("virustotal", {}),
             brand_similarity_data=data.get("brand_similarity", {}),
+            ai_explanation=data.get("ai_explanation"),
         )
     except (httpx.HTTPError, TypeError, ValueError) as exc:
         raise N8nWorkflowError(f"n8n workflow çağrısı başarısız: {type(exc).__name__}") from exc

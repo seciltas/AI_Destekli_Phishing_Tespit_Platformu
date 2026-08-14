@@ -26,6 +26,7 @@ class AnalysisResult(BaseModel):
     whois: dict[str, Any] = Field(default_factory=dict)
     virustotal: dict[str, Any] = Field(default_factory=dict)
     brand_similarity: dict[str, Any] = Field(default_factory=dict)
+    ai_explanation: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -39,3 +40,12 @@ class HealthResponse(BaseModel):
 class InternalAnalysisRequest(BaseModel):
     url: str = Field(min_length=3, max_length=2048)
     domain: str = Field(min_length=3, max_length=253)
+
+
+class AIExplanationRequest(InternalAnalysisRequest):
+    domain_age_days: Optional[int] = None
+    ssl_valid: Optional[bool] = None
+    dns: dict[str, Any] = Field(default_factory=dict)
+    whois: dict[str, Any] = Field(default_factory=dict)
+    virustotal: dict[str, Any] = Field(default_factory=dict)
+    brand_similarity: dict[str, Any] = Field(default_factory=dict)
