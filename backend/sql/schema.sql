@@ -28,8 +28,12 @@ create table if not exists public.analyses (
     dns_data jsonb not null default '{}'::jsonb,
     whois_data jsonb not null default '{}'::jsonb,
     virustotal_data jsonb not null default '{}'::jsonb,
+    brand_similarity_data jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now()
 );
+
+alter table public.analyses
+    add column if not exists brand_similarity_data jsonb not null default '{}'::jsonb;
 
 create index if not exists analyses_url_id_idx on public.analyses (url_id);
 create index if not exists analyses_created_at_idx on public.analyses (created_at desc);
