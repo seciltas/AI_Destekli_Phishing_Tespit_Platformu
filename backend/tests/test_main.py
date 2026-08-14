@@ -65,3 +65,35 @@ def test_internal_endpoint_requires_n8n_secret():
         json={"url": "https://example.com", "domain": "example.com"},
     )
     assert response.status_code == 401
+
+
+def test_ai_failure_does_not_break_signal_workflow(monkeypatch):
+    monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
+    monkeypatch.setattr(
+        main,
+        "validate_internal_target",
+        lambda _: ("https://example.com", "example.com"),
+    )
+    monkeypatch.setattr(
+        main,
+        "generate_ai_explanation",
+        lambda _: (_ for _ in ()).throw(main.AIServiceError("quota unavailable")),
+    )
+
+    response = client.post(
+        "/internal/ai-explanation",
+        headers={"X-N8N-Secret": "test-secret"},
+        json={
+            "url": "https://example.com",
+            "domain": "example.com",
+            "domain_age_days": 1000,
+            "ssl_valid": True,
+            "dns": {"a": ["93.184.216.34"]},
+            "virustotal": {"stats": {"malicious": 0, "suspicious": 0}},
+            "brand_similarity": {"suspicious": False},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ai_explanation"] is None
+    assert response.json()["ai_error"] == "quota unavailable"

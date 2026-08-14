@@ -17,6 +17,7 @@ def save_analysis(
     score: int,
     status: str,
     reasons: list[str],
+    ai_explanation: Optional[str] = None,
 ) -> dict[str, Any]:
     with get_connection() as connection:
         with connection.cursor() as cursor:
@@ -48,10 +49,11 @@ def save_analysis(
 
             cursor.execute(
                 """
-                insert into public.risk_scores (analysis_id, score, status, reasons)
-                values (%s, %s, %s, %s::jsonb)
+                insert into public.risk_scores
+                    (analysis_id, score, status, reasons, ai_explanation)
+                values (%s, %s, %s, %s::jsonb, %s)
                 """,
-                (analysis_row["id"], score, status, json.dumps(reasons)),
+                (analysis_row["id"], score, status, json.dumps(reasons), ai_explanation),
             )
             return analysis_row
 
