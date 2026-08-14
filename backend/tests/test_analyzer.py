@@ -1,4 +1,11 @@
-from analyzer import CollectedSignals, InvalidUrlError, calculate_risk, normalize_url
+from analyzer import (
+    CollectedSignals,
+    InvalidUrlError,
+    analyze_brand_similarity,
+    calculate_risk,
+    levenshtein_distance,
+    normalize_url,
+)
 
 
 def make_signals(**changes):
@@ -10,6 +17,7 @@ def make_signals(**changes):
         "dns_data": {"a": ["93.184.216.34"]},
         "whois_data": {},
         "virustotal_data": {"configured": False},
+        "brand_similarity_data": {"suspicious": False},
     }
     values.update(changes)
     return CollectedSignals(**values)
@@ -48,3 +56,19 @@ def test_multiple_risk_signals_are_dangerous():
     assert score == 100
     assert status == "dangerous"
     assert len(reasons) >= 5
+
+
+def test_levenshtein_distance_detects_one_character_change():
+    assert levenshtein_distance("paypal", "paypa1") == 1
+
+
+def test_brand_similarity_flags_typosquatting():
+    result = analyze_brand_similarity("paypa1.com")
+    assert result["matched_brand"] == "paypal"
+    assert result["suspicious"] is True
+
+
+def test_official_brand_domain_is_not_suspicious():
+    result = analyze_brand_similarity("paypal.com")
+    assert result["matched_brand"] == "paypal"
+    assert result["suspicious"] is False

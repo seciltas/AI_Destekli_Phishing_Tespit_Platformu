@@ -25,6 +25,7 @@ class AnalysisResult(BaseModel):
     dns: dict[str, Any] = Field(default_factory=dict)
     whois: dict[str, Any] = Field(default_factory=dict)
     virustotal: dict[str, Any] = Field(default_factory=dict)
+    brand_similarity: dict[str, Any] = Field(default_factory=dict)
     created_at: Optional[datetime] = None
 
 
@@ -32,3 +33,9 @@ class HealthResponse(BaseModel):
     status: str
     database_configured: bool
     database_connected: bool
+    n8n_enabled: bool
+
+
+class InternalAnalysisRequest(BaseModel):
+    url: str = Field(min_length=3, max_length=2048)
+    domain: str = Field(min_length=3, max_length=253)

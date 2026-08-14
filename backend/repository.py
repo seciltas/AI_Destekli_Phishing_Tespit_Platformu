@@ -13,6 +13,7 @@ def save_analysis(
     dns_data: dict[str, Any],
     whois_data: dict[str, Any],
     virustotal_data: dict[str, Any],
+    brand_similarity_data: dict[str, Any],
     score: int,
     status: str,
     reasons: list[str],
@@ -28,8 +29,9 @@ def save_analysis(
             cursor.execute(
                 """
                 insert into public.analyses
-                    (url_id, domain_age_days, ssl_valid, dns_data, whois_data, virustotal_data)
-                values (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb)
+                    (url_id, domain_age_days, ssl_valid, dns_data, whois_data,
+                     virustotal_data, brand_similarity_data)
+                values (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
                 returning id, created_at
                 """,
                 (
@@ -39,6 +41,7 @@ def save_analysis(
                     json.dumps(dns_data),
                     json.dumps(whois_data),
                     json.dumps(virustotal_data),
+                    json.dumps(brand_similarity_data),
                 ),
             )
             analysis_row = cursor.fetchone()
@@ -60,7 +63,7 @@ def list_analyses(limit: int = 50) -> list[dict[str, Any]]:
                 """
                 select
                     a.id, a.created_at, a.domain_age_days, a.ssl_valid,
-                    a.dns_data, a.whois_data, a.virustotal_data,
+                    a.dns_data, a.whois_data, a.virustotal_data, a.brand_similarity_data,
                     u.url, u.domain,
                     r.score, r.status, r.reasons, r.ai_explanation
                 from public.analyses a
