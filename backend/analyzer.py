@@ -24,6 +24,19 @@ SUSPICIOUS_WORDS = {
     "wallet",
 }
 
+PROTECTED_BRANDS = {
+    "amazon": {"amazon.com", "amazon.com.tr"},
+    "apple": {"apple.com"},
+    "facebook": {"facebook.com"},
+    "google": {"google.com"},
+    "instagram": {"instagram.com"},
+    "microsoft": {"microsoft.com", "live.com", "office.com"},
+    "netflix": {"netflix.com"},
+    "paypal": {"paypal.com"},
+    "telegram": {"telegram.org"},
+    "whatsapp": {"whatsapp.com"},
+}
+
 
 class InvalidUrlError(ValueError):
     pass
@@ -38,6 +51,7 @@ class CollectedSignals:
     dns_data: dict[str, Any]
     whois_data: dict[str, Any]
     virustotal_data: dict[str, Any]
+    brand_similarity_data: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -91,6 +105,56 @@ def _json_safe(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     return str(value)
+
+
+def levenshtein_distance(left: str, right: str) -> int:
+    if len(left) < len(right):
+        return levenshtein_distance(right, left)
+    if not right:
+        return len(left)
+
+    previous = list(range(len(right) + 1))
+    for left_index, left_character in enumerate(left, start=1):
+        current = [left_index]
+        for right_index, right_character in enumerate(right, start=1):
+            current.append(
+                min(
+                    current[-1] + 1,
+                    previous[right_index] + 1,
+                    previous[right_index - 1] + (left_character != right_character),
+                )
+            )
+        previous = current
+    return previous[-1]
+
+
+def analyze_brand_similarity(domain: str) -> dict[str, Any]:
+    labels = domain.lower().split(".")
+    candidate = labels[-2] if len(labels) >= 2 else labels[0]
+    best: dict[str, Any] = {
+        "candidate": candidate,
+        "matched_brand": None,
+        "distance": None,
+        "similarity": 0.0,
+        "suspicious": False,
+    }
+
+    for brand, official_domains in PROTECTED_BRANDS.items():
+        distance = levenshtein_distance(candidate, brand)
+        similarity = 1 - (distance / max(len(candidate), len(brand)))
+        is_official = domain in official_domains or any(
+            domain.endswith(f".{official}") for official in official_domains
+        )
+        suspicious = not is_official and similarity >= 0.72
+        if similarity > best["similarity"]:
+            best = {
+                "candidate": candidate,
+                "matched_brand": brand,
+                "distance": distance,
+                "similarity": round(similarity, 3),
+                "suspicious": suspicious,
+            }
+    return best
 
 
 def collect_dns(domain: str) -> dict[str, Any]:
@@ -208,6 +272,14 @@ def calculate_risk(signals: CollectedSignals) -> tuple[int, str, list[str]]:
         score += 10
         reasons.append("Alan adında çok sayıda tire var")
 
+    brand_data = signals.brand_similarity_data
+    if brand_data.get("suspicious"):
+        score += 25
+        reasons.append(
+            f"Alan adı {brand_data['matched_brand']} markasına benziyor "
+            f"(%{round(brand_data['similarity'] * 100)})"
+        )
+
     try:
         ipaddress.ip_address(signals.domain)
         score += 30
@@ -240,6 +312,7 @@ def analyze_url(raw_url: str) -> tuple[CollectedSignals, int, str, list[str]]:
     domain_age_days, whois_data = collect_whois(domain)
     whois_data["ssl"] = ssl_data
     virustotal_data = collect_virustotal(url)
+    brand_similarity_data = analyze_brand_similarity(domain)
 
     signals = CollectedSignals(
         url=url,
@@ -249,6 +322,7 @@ def analyze_url(raw_url: str) -> tuple[CollectedSignals, int, str, list[str]]:
         dns_data=dns_data,
         whois_data=whois_data,
         virustotal_data=virustotal_data,
+        brand_similarity_data=brand_similarity_data,
     )
     score, status, reasons = calculate_risk(signals)
     return signals, score, status, reasons

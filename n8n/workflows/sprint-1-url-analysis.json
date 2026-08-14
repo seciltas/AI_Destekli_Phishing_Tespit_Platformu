@@ -1,0 +1,142 @@
+{
+  "id": "sprint1UrlAnalysis",
+  "name": "Sprint 1 - URL Phishing Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "phishing-url-analysis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c62a5211-3d0b-45e5-8d37-3510dbc5e875",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-820, 120],
+      "webhookId": "b8fbfc86-0b25-478e-b9be-cdb179075099"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/signals/whois",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Webhook').item.json.body }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "84fc8eaa-dc5f-4e71-aa27-94232038c6c1",
+      "name": "WHOIS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-580, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/signals/dns",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Webhook').item.json.body }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "03b95b38-dcd0-428c-b674-13000197b4b6",
+      "name": "DNS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-340, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/signals/ssl",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Webhook').item.json.body }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "d0602e7e-787e-403b-8d24-68eb4aa21da8",
+      "name": "SSL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-100, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/signals/brand",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Webhook').item.json.body }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "42029adf-5ea2-41f9-8dda-928a78597787",
+      "name": "Brand Similarity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [140, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/signals/virustotal",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Webhook').item.json.body }}",
+        "options": {"timeout": 20000}
+      },
+      "id": "2d168748-7d54-4fd6-a5e7-d00fc9949603",
+      "name": "VirusTotal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const whois = $('WHOIS').first().json;\nconst dns = $('DNS').first().json;\nconst ssl = $('SSL').first().json;\nconst brand = $('Brand Similarity').first().json;\nconst virustotal = $('VirusTotal').first().json;\nreturn [{ json: {\n  domain_age_days: whois.domain_age_days ?? null,\n  whois: { ...(whois.whois ?? {}), ssl: ssl.ssl ?? {} },\n  dns: dns.dns ?? {},\n  ssl_valid: ssl.ssl_valid ?? null,\n  brand_similarity: brand.brand_similarity ?? {},\n  virustotal: virustotal.virustotal ?? {}\n} }];"
+      },
+      "id": "0655b84b-68d8-42ec-b1d4-c570f9d99bb2",
+      "name": "Combine Signals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "0b47e79e-c21f-40cb-8c84-39ac52f5f1cc",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [860, 120]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {"main": [[{"node": "WHOIS", "type": "main", "index": 0}]]},
+    "WHOIS": {"main": [[{"node": "DNS", "type": "main", "index": 0}]]},
+    "DNS": {"main": [[{"node": "SSL", "type": "main", "index": 0}]]},
+    "SSL": {"main": [[{"node": "Brand Similarity", "type": "main", "index": 0}]]},
+    "Brand Similarity": {"main": [[{"node": "VirusTotal", "type": "main", "index": 0}]]},
+    "VirusTotal": {"main": [[{"node": "Combine Signals", "type": "main", "index": 0}]]},
+    "Combine Signals": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "versionId": "e86f208b-a8d1-4cb3-bdf4-f0a7491e2698",
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}

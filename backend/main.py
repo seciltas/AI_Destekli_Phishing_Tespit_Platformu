@@ -1,12 +1,32 @@
 import os
+import secrets
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from analyzer import InvalidUrlError, analyze_url
+from analyzer import (
+    CollectedSignals,
+    InvalidUrlError,
+    analyze_brand_similarity,
+    analyze_url,
+    calculate_risk,
+    collect_dns,
+    collect_ssl,
+    collect_virustotal,
+    collect_whois,
+    ensure_public_destination,
+    normalize_url,
+)
 from database import DatabaseConfigurationError, database_is_connected, get_database_url
-from models import AnalysisResult, AnalyzeRequest, HealthResponse
+from models import AnalysisResult, AnalyzeRequest, HealthResponse, InternalAnalysisRequest
+from n8n_client import (
+    N8nConfigurationError,
+    N8nWorkflowError,
+    collect_signals_via_n8n,
+    n8n_is_enabled,
+)
 from repository import list_analyses, save_analysis
 
 
@@ -23,6 +43,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(InvalidUrlError)
+def invalid_url_handler(_, exc: InvalidUrlError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.get("/")
@@ -42,7 +67,56 @@ def health() -> HealthResponse:
         status="ok" if database_connected else "degraded",
         database_configured=database_configured,
         database_connected=database_connected,
+        n8n_enabled=n8n_is_enabled(),
     )
+
+
+def require_n8n_secret(
+    x_n8n_secret: str | None = Header(default=None, alias="X-N8N-Secret"),
+) -> None:
+    expected = os.getenv("N8N_SHARED_SECRET", "").strip()
+    if not expected or not x_n8n_secret or not secrets.compare_digest(expected, x_n8n_secret):
+        raise HTTPException(status_code=401, detail="Geçersiz n8n erişim anahtarı.")
+
+
+def validate_internal_target(payload: InternalAnalysisRequest) -> tuple[str, str]:
+    url, domain = normalize_url(payload.url)
+    if domain != payload.domain.lower():
+        raise InvalidUrlError("URL ve domain birbiriyle eşleşmiyor.")
+    ensure_public_destination(domain)
+    return url, domain
+
+
+@app.post("/internal/signals/whois", dependencies=[Depends(require_n8n_secret)])
+def internal_whois(payload: InternalAnalysisRequest) -> dict[str, Any]:
+    _, domain = validate_internal_target(payload)
+    domain_age_days, whois_data = collect_whois(domain)
+    return {"domain_age_days": domain_age_days, "whois": whois_data}
+
+
+@app.post("/internal/signals/dns", dependencies=[Depends(require_n8n_secret)])
+def internal_dns(payload: InternalAnalysisRequest) -> dict[str, Any]:
+    _, domain = validate_internal_target(payload)
+    return {"dns": collect_dns(domain)}
+
+
+@app.post("/internal/signals/ssl", dependencies=[Depends(require_n8n_secret)])
+def internal_ssl(payload: InternalAnalysisRequest) -> dict[str, Any]:
+    _, domain = validate_internal_target(payload)
+    ssl_valid, ssl_data = collect_ssl(domain)
+    return {"ssl_valid": ssl_valid, "ssl": ssl_data}
+
+
+@app.post("/internal/signals/brand", dependencies=[Depends(require_n8n_secret)])
+def internal_brand(payload: InternalAnalysisRequest) -> dict[str, Any]:
+    _, domain = validate_internal_target(payload)
+    return {"brand_similarity": analyze_brand_similarity(domain)}
+
+
+@app.post("/internal/signals/virustotal", dependencies=[Depends(require_n8n_secret)])
+def internal_virustotal(payload: InternalAnalysisRequest) -> dict[str, Any]:
+    url, _ = validate_internal_target(payload)
+    return {"virustotal": collect_virustotal(url)}
 
 
 @app.post(
@@ -52,7 +126,14 @@ def health() -> HealthResponse:
 )
 def analyze(payload: AnalyzeRequest) -> AnalysisResult:
     try:
-        signals, score, risk_status, reasons = analyze_url(payload.url)
+        if n8n_is_enabled():
+            normalized_url, domain = normalize_url(payload.url)
+            ensure_public_destination(domain)
+            signals = collect_signals_via_n8n(normalized_url, domain)
+            signals.whois_data["ssl"] = signals.whois_data.get("ssl", {})
+            score, risk_status, reasons = calculate_risk(signals)
+        else:
+            signals, score, risk_status, reasons = analyze_url(payload.url)
         analysis_row = save_analysis(
             url=signals.url,
             domain=signals.domain,
@@ -61,14 +142,17 @@ def analyze(payload: AnalyzeRequest) -> AnalysisResult:
             dns_data=signals.dns_data,
             whois_data=signals.whois_data,
             virustotal_data=signals.virustotal_data,
+            brand_similarity_data=signals.brand_similarity_data,
             score=score,
             status=risk_status,
             reasons=reasons,
         )
     except InvalidUrlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except DatabaseConfigurationError as exc:
+    except (DatabaseConfigurationError, N8nConfigurationError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except N8nWorkflowError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=502,
@@ -87,6 +171,7 @@ def analyze(payload: AnalyzeRequest) -> AnalysisResult:
         dns=signals.dns_data,
         whois=signals.whois_data,
         virustotal=signals.virustotal_data,
+        brand_similarity=signals.brand_similarity_data,
         created_at=analysis_row.get("created_at"),
     )
 
