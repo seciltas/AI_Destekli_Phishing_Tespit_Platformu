@@ -1,6 +1,6 @@
 import os
 import secrets
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -72,7 +72,7 @@ def health() -> HealthResponse:
 
 
 def require_n8n_secret(
-    x_n8n_secret: str | None = Header(default=None, alias="X-N8N-Secret"),
+    x_n8n_secret: Optional[str] = Header(default=None, alias="X-N8N-Secret"),
 ) -> None:
     expected = os.getenv("N8N_SHARED_SECRET", "").strip()
     if not expected or not x_n8n_secret or not secrets.compare_digest(expected, x_n8n_secret):
