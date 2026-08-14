@@ -5,7 +5,7 @@ import socket
 import ssl
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import Any, Optional, Tuple
 from urllib.parse import urlparse
 
 import dns.resolver
@@ -33,8 +33,8 @@ class InvalidUrlError(ValueError):
 class CollectedSignals:
     url: str
     domain: str
-    domain_age_days: int | None
-    ssl_valid: bool | None
+    domain_age_days: Optional[int]
+    ssl_valid: Optional[bool]
     dns_data: dict[str, Any]
     whois_data: dict[str, Any]
     virustotal_data: dict[str, Any]
@@ -108,7 +108,7 @@ def collect_dns(domain: str) -> dict[str, Any]:
     return result
 
 
-def collect_ssl(domain: str) -> tuple[bool | None, dict[str, Any]]:
+def collect_ssl(domain: str) -> Tuple[Optional[bool], dict[str, Any]]:
     context = ssl.create_default_context()
     try:
         with socket.create_connection((domain, 443), timeout=5) as connection:
@@ -122,7 +122,7 @@ def collect_ssl(domain: str) -> tuple[bool | None, dict[str, Any]]:
         return False, {"error": type(exc).__name__}
 
 
-def collect_whois(domain: str) -> tuple[int | None, dict[str, Any]]:
+def collect_whois(domain: str) -> Tuple[Optional[int], dict[str, Any]]:
     try:
         record = whois.whois(domain)
         creation_date = record.creation_date

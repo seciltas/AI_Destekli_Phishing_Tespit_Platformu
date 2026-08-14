@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Any, Optional
 
 from database import get_connection
 
@@ -8,8 +8,8 @@ def save_analysis(
     *,
     url: str,
     domain: str,
-    domain_age_days: int | None,
-    ssl_valid: bool | None,
+    domain_age_days: Optional[int],
+    ssl_valid: Optional[bool],
     dns_data: dict[str, Any],
     whois_data: dict[str, Any],
     virustotal_data: dict[str, Any],

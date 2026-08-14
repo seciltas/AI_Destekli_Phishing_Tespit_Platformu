@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -14,18 +14,18 @@ class AnalyzeRequest(BaseModel):
 
 
 class AnalysisResult(BaseModel):
-    id: int | None = None
+    id: Optional[int] = None
     url: str
     domain: str
     risk: int = Field(ge=0, le=100)
     status: Literal["safe", "suspicious", "dangerous"]
     reasons: list[str]
-    domain_age_days: int | None = None
-    ssl_valid: bool | None = None
+    domain_age_days: Optional[int] = None
+    ssl_valid: Optional[bool] = None
     dns: dict[str, Any] = Field(default_factory=dict)
     whois: dict[str, Any] = Field(default_factory=dict)
     virustotal: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime | None = None
+    created_at: Optional[datetime] = None
 
 
 class HealthResponse(BaseModel):
