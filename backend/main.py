@@ -19,8 +19,15 @@ from analyzer import (
     ensure_public_destination,
     normalize_url,
 )
+from ai_explainer import AIConfigurationError, AIServiceError, generate_ai_explanation
 from database import DatabaseConfigurationError, database_is_connected, get_database_url
-from models import AnalysisResult, AnalyzeRequest, HealthResponse, InternalAnalysisRequest
+from models import (
+    AIExplanationRequest,
+    AnalysisResult,
+    AnalyzeRequest,
+    HealthResponse,
+    InternalAnalysisRequest,
+)
 from n8n_client import (
     N8nConfigurationError,
     N8nWorkflowError,
@@ -119,6 +126,57 @@ def internal_virustotal(payload: InternalAnalysisRequest) -> dict[str, Any]:
     return {"virustotal": collect_virustotal(url)}
 
 
+@app.post("/internal/ai-explanation", dependencies=[Depends(require_n8n_secret)])
+def internal_ai_explanation(payload: AIExplanationRequest) -> dict[str, Any]:
+    url, domain = validate_internal_target(payload)
+    signals = CollectedSignals(
+        url=url,
+        domain=domain,
+        domain_age_days=payload.domain_age_days,
+        ssl_valid=payload.ssl_valid,
+        dns_data=payload.dns,
+        whois_data=payload.whois,
+        virustotal_data=payload.virustotal,
+        brand_similarity_data=payload.brand_similarity,
+    )
+    score, risk_status, reasons = calculate_risk(signals)
+    explanation_input = {
+        "domain": domain,
+        "risk_score": score,
+        "risk_status": risk_status,
+        "reasons": reasons,
+        "domain_age_days": signals.domain_age_days,
+        "ssl_valid": signals.ssl_valid,
+        "virustotal_stats": signals.virustotal_data.get("stats", {}),
+        "brand_similarity": signals.brand_similarity_data,
+    }
+    try:
+        ai_explanation = generate_ai_explanation(explanation_input)
+    except AIConfigurationError as exc:
+        return {
+            "risk": score,
+            "status": risk_status,
+            "reasons": reasons,
+            "ai_explanation": None,
+            "ai_error": str(exc),
+        }
+    except AIServiceError as exc:
+        return {
+            "risk": score,
+            "status": risk_status,
+            "reasons": reasons,
+            "ai_explanation": None,
+            "ai_error": str(exc),
+        }
+
+    return {
+        "risk": score,
+        "status": risk_status,
+        "reasons": reasons,
+        "ai_explanation": ai_explanation,
+    }
+
+
 @app.post(
     "/analyze",
     response_model=AnalysisResult,
@@ -146,6 +204,7 @@ def analyze(payload: AnalyzeRequest) -> AnalysisResult:
             score=score,
             status=risk_status,
             reasons=reasons,
+            ai_explanation=signals.ai_explanation,
         )
     except InvalidUrlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -172,6 +231,7 @@ def analyze(payload: AnalyzeRequest) -> AnalysisResult:
         whois=signals.whois_data,
         virustotal=signals.virustotal_data,
         brand_similarity=signals.brand_similarity_data,
+        ai_explanation=signals.ai_explanation,
         created_at=analysis_row.get("created_at"),
     )
 

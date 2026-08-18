@@ -30,7 +30,10 @@ Webhook
 6. **VirusTotal:** URL'nin VirusTotal analiz istatistiklerini alır. API anahtarı yoksa bu
    adım `configured: false` döndürür ve workflow devam eder.
 7. **Combine Signals:** Önceki node çıktılarından tek bir JSON oluşturur.
-8. **Respond to Webhook:** JSON sonucunu FastAPI'ye geri gönderir.
+8. **AI Explanation:** Risk verilerini OpenAI'a göndererek en fazla üç kısa Türkçe
+   cümleden oluşan kullanıcı açıklaması üretir. API kullanılamazsa teknik analiz devam eder.
+9. **Finalize Result:** Teknik sinyaller ile AI açıklamasını tek JSON'da birleştirir.
+10. **Respond to Webhook:** JSON sonucunu FastAPI'ye geri gönderir.
 
 ## İlk kurulum
 
@@ -179,6 +182,13 @@ Gerçek değerleri Git'e göndermeyin.
 
 `backend/.env` içindeki `VIRUSTOTAL_API_KEY` boştur. Anahtar ekledikten sonra FastAPI'yi
 yeniden başlatın.
+
+### AI açıklaması görünmüyor
+
+`backend/.env` içinde `OPENAI_API_KEY` ve `OPENAI_MODEL` tanımlı olmalıdır. OpenAI
+`insufficient_quota` döndürüyorsa API hesabında billing/kredi etkin değildir. ChatGPT
+aboneliği OpenAI API kredisinden ayrıdır. Kota yokken URL analizi çalışmaya devam eder,
+ancak `ai_explanation` boş ve n8n execution çıktısındaki `ai_error` dolu olur.
 
 ### Analiz uzun sürüyor
 
