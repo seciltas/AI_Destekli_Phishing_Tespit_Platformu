@@ -59,12 +59,62 @@ def test_analyze_rejects_invalid_url(monkeypatch):
     assert response.json() == {"detail": "Geçersiz URL"}
 
 
+def test_analyze_sends_telegram_notification_above_80(monkeypatch):
+    monkeypatch.setattr(main, "n8n_is_enabled", lambda: False)
+    signals = CollectedSignals(
+        url="https://bad.example",
+        domain="bad.example",
+        domain_age_days=1,
+        ssl_valid=False,
+        dns_data={"a": []},
+        whois_data={},
+        virustotal_data={"stats": {"malicious": 5}},
+        brand_similarity_data={"suspicious": False},
+    )
+    monkeypatch.setattr(
+        main,
+        "analyze_url",
+        lambda _: (signals, 81, "dangerous", ["VirusTotal uyarısı"]),
+    )
+    monkeypatch.setattr(main, "save_analysis", lambda **_: {"id": 8})
+    notification = {}
+    monkeypatch.setattr(
+        main,
+        "notify_high_risk_analysis",
+        lambda **kwargs: notification.update(kwargs),
+    )
+
+    response = client.post("/analyze", json={"url": "https://bad.example"})
+
+    assert response.status_code == 201
+    assert notification["risk"] == 81
+    assert notification["domain"] == "bad.example"
+
+
 def test_internal_endpoint_requires_n8n_secret():
     response = client.post(
         "/internal/signals/dns",
         json={"url": "https://example.com", "domain": "example.com"},
     )
     assert response.status_code == 401
+
+
+def test_internal_text_url_checks_uses_virustotal_helper(monkeypatch):
+    monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
+    monkeypatch.setattr(
+        main,
+        "analyze_text_urls",
+        lambda text: [{"url": "https://bad.example", "virustotal": {"found": True}}],
+    )
+
+    response = client.post(
+        "/internal/signals/text-urls",
+        headers={"X-N8N-Secret": "test-secret"},
+        json={"text": "https://bad.example"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["urls"][0]["virustotal"]["found"] is True
 
 
 def test_ai_failure_does_not_break_signal_workflow(monkeypatch):

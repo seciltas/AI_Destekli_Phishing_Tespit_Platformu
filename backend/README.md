@@ -19,6 +19,14 @@ FRONTEND_ORIGIN=http://localhost:5173
 eklenmemelidir. Parolada özel URL karakterleri varsa percent-encoding uygulanmalıdır.
 `VIRUSTOTAL_API_KEY` boş bırakılırsa diğer analizler çalışmaya devam eder.
 
+`TELEGRAM_BOT_TOKEN` ve `TELEGRAM_CHAT_ID` birlikte tanımlanırsa risk skoru **80'den
+büyük** analizlerde Telegram bildirimi gönderilir. Telegram erişilemezse analiz ve
+veritabanı kaydı devam eder.
+
+SMS/e-posta n8n workflow'u, metindeki bağlantıların VirusTotal özetini almak için
+`POST /internal/signals/text-urls` adresini `X-N8N-Secret` başlığıyla çağırabilir.
+Gövde: `{ "text": "..." }`. En fazla 10 benzersiz HTTP(S) URL'si kontrol edilir.
+
 ## 3. Kurulum ve çalıştırma
 
 PowerShell:

@@ -10,6 +10,7 @@ from analyzer import (
     CollectedSignals,
     InvalidUrlError,
     analyze_brand_similarity,
+    analyze_text_urls,
     analyze_url,
     calculate_risk,
     collect_dns,
@@ -27,6 +28,7 @@ from models import (
     AnalyzeRequest,
     HealthResponse,
     InternalAnalysisRequest,
+    TextUrlCheckRequest,
 )
 from n8n_client import (
     N8nConfigurationError,
@@ -35,6 +37,7 @@ from n8n_client import (
     n8n_is_enabled,
 )
 from repository import list_analyses, save_analysis
+from telegram_notifier import notify_high_risk_analysis
 
 
 app = FastAPI(
@@ -126,6 +129,11 @@ def internal_virustotal(payload: InternalAnalysisRequest) -> dict[str, Any]:
     return {"virustotal": collect_virustotal(url)}
 
 
+@app.post("/internal/signals/text-urls", dependencies=[Depends(require_n8n_secret)])
+def internal_text_url_checks(payload: TextUrlCheckRequest) -> dict[str, Any]:
+    return {"urls": analyze_text_urls(payload.text)}
+
+
 @app.post("/internal/ai-explanation", dependencies=[Depends(require_n8n_secret)])
 def internal_ai_explanation(payload: AIExplanationRequest) -> dict[str, Any]:
     url, domain = validate_internal_target(payload)
@@ -205,6 +213,13 @@ def analyze(payload: AnalyzeRequest) -> AnalysisResult:
             status=risk_status,
             reasons=reasons,
             ai_explanation=signals.ai_explanation,
+        )
+        # Telegram kesintisi analiz sonucunu veya veritabanı kaydını etkilemez.
+        notify_high_risk_analysis(
+            url=signals.url,
+            domain=signals.domain,
+            risk=score,
+            reasons=reasons,
         )
     except InvalidUrlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
