@@ -1,6 +1,7 @@
 import base64
 import ipaddress
 import os
+import re
 import socket
 import ssl
 from dataclasses import asdict, dataclass
@@ -23,6 +24,11 @@ SUSPICIOUS_WORDS = {
     "verify",
     "wallet",
 }
+
+# Metin içindeki bağlantıları yakalamak için yeterince dar bir desen kullanılır. Bu
+# adresler ziyaret edilmez; yalnızca VirusTotal'ın URL sorgusuna gönderilir.
+URL_PATTERN = re.compile(r"https?://[^\s<>'\"`]+", re.IGNORECASE)
+MAX_TEXT_URLS = 10
 
 PROTECTED_BRANDS = {
     "amazon": {"amazon.com", "amazon.com.tr"},
@@ -232,6 +238,28 @@ def collect_virustotal(url: str) -> dict[str, Any]:
         return {"configured": True, "found": True, "stats": stats}
     except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
         return {"configured": True, "error": type(exc).__name__}
+
+
+def extract_urls_from_text(text: str, limit: int = MAX_TEXT_URLS) -> list[str]:
+    """Metindeki HTTP(S) adreslerini, sıralarını koruyarak tekilleştirir."""
+    urls: list[str] = []
+    seen: set[str] = set()
+    for match in URL_PATTERN.finditer(text):
+        url = match.group(0).rstrip(".,;:!?)]}")
+        if url and url not in seen:
+            seen.add(url)
+            urls.append(url)
+        if len(urls) >= limit:
+            break
+    return urls
+
+
+def analyze_text_urls(text: str) -> list[dict[str, Any]]:
+    """Metindeki her benzersiz URL'nin VirusTotal özetini döndürür."""
+    return [
+        {"url": url, "virustotal": collect_virustotal(url)}
+        for url in extract_urls_from_text(text)
+    ]
 
 
 def calculate_risk(signals: CollectedSignals) -> tuple[int, str, list[str]]:

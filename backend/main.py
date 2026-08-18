@@ -1,6 +1,6 @@
 import os
 import secrets
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +10,7 @@ from analyzer import (
     CollectedSignals,
     InvalidUrlError,
     analyze_brand_similarity,
+    analyze_text_urls,
     analyze_url,
     calculate_risk,
     collect_dns,
@@ -29,6 +30,7 @@ from models import (
     InternalAnalysisRequest,
     TextAnalysisRequest,
     TextAnalysisResult,
+    TextUrlCheckRequest,
 )
 from n8n_client import (
     N8nConfigurationError,
@@ -38,6 +40,8 @@ from n8n_client import (
 )
 from repository import list_analyses, save_analysis
 from text_analyzer import analyze_text_message
+from telegram_notifier import notify_high_risk_analysis
+from telegram_notifier import notify_high_risk_analysis
 
 
 app = FastAPI(
@@ -82,7 +86,7 @@ def health() -> HealthResponse:
 
 
 def require_n8n_secret(
-    x_n8n_secret: str | None = Header(default=None, alias="X-N8N-Secret"),
+    x_n8n_secret: Optional[str] = Header(default=None, alias="X-N8N-Secret"),
 ) -> None:
     expected = os.getenv("N8N_SHARED_SECRET", "").strip()
     if not expected or not x_n8n_secret or not secrets.compare_digest(expected, x_n8n_secret):
@@ -127,6 +131,11 @@ def internal_brand(payload: InternalAnalysisRequest) -> dict[str, Any]:
 def internal_virustotal(payload: InternalAnalysisRequest) -> dict[str, Any]:
     url, _ = validate_internal_target(payload)
     return {"virustotal": collect_virustotal(url)}
+
+
+@app.post("/internal/signals/text-urls", dependencies=[Depends(require_n8n_secret)])
+def internal_text_url_checks(payload: TextUrlCheckRequest) -> dict[str, Any]:
+    return {"urls": analyze_text_urls(payload.text)}
 
 
 @app.post("/internal/ai-explanation", dependencies=[Depends(require_n8n_secret)])
@@ -208,6 +217,13 @@ def analyze(payload: AnalyzeRequest) -> AnalysisResult:
             status=risk_status,
             reasons=reasons,
             ai_explanation=signals.ai_explanation,
+        )
+        # Telegram kesintisi analiz sonucunu veya veritabanı kaydını etkilemez.
+        notify_high_risk_analysis(
+            url=signals.url,
+            domain=signals.domain,
+            risk=score,
+            reasons=reasons,
         )
     except InvalidUrlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
