@@ -27,6 +27,8 @@ from models import (
     AnalyzeRequest,
     HealthResponse,
     InternalAnalysisRequest,
+    TextAnalysisRequest,
+    TextAnalysisResult,
 )
 from n8n_client import (
     N8nConfigurationError,
@@ -35,6 +37,7 @@ from n8n_client import (
     n8n_is_enabled,
 )
 from repository import list_analyses, save_analysis
+from text_analyzer import analyze_text_message
 
 
 app = FastAPI(
@@ -247,3 +250,21 @@ def analyses(limit: int = Query(default=50, ge=1, le=100)) -> list[dict[str, Any
             status_code=502,
             detail=f"Analiz geçmişi alınamadı: {type(exc).__name__}",
         ) from exc
+
+
+@app.post("/analyze-text", response_model=TextAnalysisResult)
+def analyze_text(payload: TextAnalysisRequest) -> TextAnalysisResult:
+    result = analyze_text_message(
+        payload.text,
+        api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+        model=os.getenv("OPENAI_MODEL", "gpt-5-mini").strip(),
+    )
+    return TextAnalysisResult(
+        risk=result.risk,
+        status=result.status,
+        reasons=result.reasons,
+        signals=result.signals,
+        ai_explanation=result.ai_explanation,
+        ai_used=result.ai_used,
+        ai_error=result.ai_error,
+    )

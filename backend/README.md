@@ -44,4 +44,9 @@ Temel endpoint'ler:
 
 - `GET /health`
 - `POST /analyze` — gövde: `{"url": "https://example.com"}`
+- `POST /analyze-text` — gövde: `{"text": "Acil, hesabınızı doğrulayın."}`
 - `GET /analyses?limit=50`
+
+`/analyze-text`, mesajdaki aciliyet, korku, ödül vaadi, kimlik bilgisi talebi ve
+şüpheli bağlantı sinyallerini döndürür. OpenAI kullanılamazsa anahtar kelime tabanlı
+yedek analiz devreye girer; bu durumda yanıttaki `ai_used` değeri `false` olur.
