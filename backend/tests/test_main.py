@@ -152,6 +152,8 @@ def test_ai_failure_does_not_break_signal_workflow(monkeypatch):
 def test_analyze_text_returns_result(monkeypatch):
     from text_analyzer import TextAnalysis
 
+    monkeypatch.setattr(main, "n8n_text_is_enabled", lambda: False)
+    monkeypatch.setattr(main, "analyze_text_urls", lambda _: [])
     monkeypatch.setattr(
         main,
         "analyze_text_message",
@@ -180,6 +182,51 @@ def test_analyze_text_returns_result(monkeypatch):
     assert response.json()["risk"] == 70
     assert response.json()["status"] == "dangerous"
     assert response.json()["signals"]["credential_request"] is True
+
+
+def test_analyze_text_uses_n8n_workflow_when_enabled(monkeypatch):
+    monkeypatch.setattr(main, "n8n_text_is_enabled", lambda: True)
+    monkeypatch.setattr(
+        main,
+        "analyze_text_via_n8n",
+        lambda text: {
+            "risk": 65,
+            "status": "dangerous",
+            "reasons": ["VirusTotal uyarısı"],
+            "signals": {
+                "urgency": False,
+                "fear": False,
+                "reward": False,
+                "credential_request": False,
+                "suspicious_link": True,
+                "impersonation": False,
+                "payment_request": False,
+            },
+            "risk_breakdown": {"suspicious_link": 20, "virustotal_malicious": 45},
+            "url_checks": [{"url": "https://bad.example", "virustotal": {}}],
+            "ai_explanation": "Bağlantı riskli işaretler taşıyor.",
+            "ai_used": True,
+            "ai_error": None,
+        },
+    )
+
+    response = client.post(
+        "/analyze-text",
+        json={"text": "Bu bağlantıyı kontrol edin: https://bad.example"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["risk"] == 65
+    assert response.json()["url_checks"][0]["url"] == "https://bad.example"
+
+
+def test_internal_text_analysis_requires_n8n_secret():
+    response = client.post(
+        "/internal/text-analysis",
+        json={"text": "Acil mesaj", "url_checks": []},
+    )
+
+    assert response.status_code == 401
 
 
 def test_analyze_text_rejects_blank_text():

@@ -27,6 +27,7 @@ from models import (
     AnalysisResult,
     AnalyzeRequest,
     HealthResponse,
+    InternalTextAnalysisRequest,
     InternalAnalysisRequest,
     TextAnalysisRequest,
     TextAnalysisResult,
@@ -35,8 +36,10 @@ from models import (
 from n8n_client import (
     N8nConfigurationError,
     N8nWorkflowError,
+    analyze_text_via_n8n,
     collect_signals_via_n8n,
     n8n_is_enabled,
+    n8n_text_is_enabled,
 )
 from repository import list_analyses, save_analysis
 from text_analyzer import analyze_text_message
@@ -135,6 +138,21 @@ def internal_virustotal(payload: InternalAnalysisRequest) -> dict[str, Any]:
 @app.post("/internal/signals/text-urls", dependencies=[Depends(require_n8n_secret)])
 def internal_text_url_checks(payload: TextUrlCheckRequest) -> dict[str, Any]:
     return {"urls": analyze_text_urls(payload.text)}
+
+
+@app.post(
+    "/internal/text-analysis",
+    response_model=TextAnalysisResult,
+    dependencies=[Depends(require_n8n_secret)],
+)
+def internal_text_analysis(payload: InternalTextAnalysisRequest) -> TextAnalysisResult:
+    result = analyze_text_message(
+        payload.text,
+        api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+        model=os.getenv("OPENAI_MODEL", "gpt-5-mini").strip(),
+        url_checks=payload.url_checks,
+    )
+    return TextAnalysisResult(**result.to_dict())
 
 
 @app.post("/internal/ai-explanation", dependencies=[Depends(require_n8n_secret)])
@@ -269,18 +287,19 @@ def analyses(limit: int = Query(default=50, ge=1, le=100)) -> list[dict[str, Any
 
 @app.post("/analyze-text", response_model=TextAnalysisResult)
 def analyze_text(payload: TextAnalysisRequest) -> TextAnalysisResult:
+    if n8n_text_is_enabled():
+        try:
+            return TextAnalysisResult.model_validate(analyze_text_via_n8n(payload.text))
+        except N8nConfigurationError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except N8nWorkflowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    url_checks = analyze_text_urls(payload.text)
     result = analyze_text_message(
         payload.text,
         api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         model=os.getenv("OPENAI_MODEL", "gpt-5-mini").strip(),
+        url_checks=url_checks,
     )
-    return TextAnalysisResult(
-        risk=result.risk,
-        status=result.status,
-        reasons=result.reasons,
-        signals=result.signals,
-        risk_breakdown=result.risk_breakdown,
-        ai_explanation=result.ai_explanation,
-        ai_used=result.ai_used,
-        ai_error=result.ai_error,
-    )
+    return TextAnalysisResult(**result.to_dict())

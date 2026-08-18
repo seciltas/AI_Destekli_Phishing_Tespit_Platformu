@@ -16,6 +16,24 @@ class FakeResponse:
         }
 
 
+class FakeTextResponse:
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {
+            "risk": 80,
+            "status": "dangerous",
+            "reasons": ["VirusTotal uyarısı"],
+            "signals": {"suspicious_link": True},
+            "risk_breakdown": {"suspicious_link": 20, "virustotal_malicious": 50},
+            "url_checks": [],
+            "ai_explanation": "Bu mesaj riskli bir bağlantı içeriyor.",
+            "ai_used": True,
+            "ai_error": None,
+        }
+
+
 def test_collect_signals_via_n8n(monkeypatch):
     monkeypatch.setenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/test")
     monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
@@ -28,3 +46,35 @@ def test_collect_signals_via_n8n(monkeypatch):
     assert signals.domain_age_days == 1000
     assert signals.ssl_valid is True
     assert signals.dns_data["a"] == ["93.184.216.34"]
+
+
+def test_analyze_text_via_n8n(monkeypatch):
+    captured = {}
+    monkeypatch.setenv("N8N_TEXT_WEBHOOK_URL", "http://localhost:5678/webhook/text")
+    monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return FakeTextResponse()
+
+    monkeypatch.setattr(n8n_client.httpx, "post", fake_post)
+
+    result = n8n_client.analyze_text_via_n8n("Acil mesaj")
+
+    assert result["risk"] == 80
+    assert captured["json"] == {"text": "Acil mesaj"}
+    assert captured["headers"]["X-N8N-Secret"] == "test-secret"
+    assert captured["timeout"] == 120
+
+
+def test_text_n8n_requires_configuration(monkeypatch):
+    monkeypatch.delenv("N8N_TEXT_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("N8N_SHARED_SECRET", raising=False)
+
+    try:
+        n8n_client.analyze_text_via_n8n("Acil mesaj")
+    except n8n_client.N8nConfigurationError:
+        pass
+    else:
+        raise AssertionError("Eksik n8n metin ayarı kabul edilmemeliydi")

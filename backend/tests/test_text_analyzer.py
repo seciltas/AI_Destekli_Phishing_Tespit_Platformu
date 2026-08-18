@@ -130,6 +130,28 @@ def test_ai_prompt_uses_strict_schema_and_untrusted_message_boundary(monkeypatch
     assert output_format["strict"] is True
     assert "impersonation" in output_format["schema"]["required"]
     assert "payment_request" in output_format["schema"]["required"]
-    assert captured["input"].startswith("<untrusted_message>")
+    assert "\n<untrusted_message>\n" in captured["input"]
+    assert captured["input"].endswith("\n</untrusted_message>")
     assert "Risk puanı üretme" in captured["instructions"]
     assert result["impersonation"] is True
+
+
+def test_virustotal_findings_raise_text_risk():
+    result = text_analyzer.analyze_text_message(
+        "Bilgilendirme mesajı: https://bad.example",
+        api_key="",
+        model="gpt-5-mini",
+        url_checks=[
+            {
+                "url": "https://bad.example",
+                "virustotal": {"stats": {"malicious": 4, "suspicious": 1}},
+            }
+        ],
+    )
+
+    assert result.status == "dangerous"
+    assert result.risk == 65
+    assert result.risk_breakdown["virustotal_malicious"] == 40
+    assert result.risk_breakdown["virustotal_suspicious"] == 5
+    assert result.url_checks[0]["url"] == "https://bad.example"
+    assert any("VirusTotal" in reason for reason in result.reasons)

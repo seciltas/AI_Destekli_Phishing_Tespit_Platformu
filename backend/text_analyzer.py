@@ -1,6 +1,6 @@
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import httpx
@@ -83,7 +83,21 @@ class TextAnalysis:
     risk_breakdown: dict[str, int]
     ai_explanation: str
     ai_used: bool
+    url_checks: list[dict[str, Any]] = field(default_factory=list)
     ai_error: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "risk": self.risk,
+            "status": self.status,
+            "reasons": self.reasons,
+            "signals": self.signals,
+            "risk_breakdown": self.risk_breakdown,
+            "url_checks": self.url_checks,
+            "ai_explanation": self.ai_explanation,
+            "ai_used": self.ai_used,
+            "ai_error": self.ai_error,
+        }
 
 
 def _keyword_signals(text: str) -> dict[str, bool]:
@@ -108,7 +122,12 @@ def _extract_output_text(payload: dict[str, Any]) -> str:
     raise AIServiceError("OpenAI yanıtında metin analizi bulunamadı.")
 
 
-def _analyze_with_ai(text: str, api_key: str, model: str) -> dict[str, Any]:
+def _analyze_with_ai(
+    text: str,
+    api_key: str,
+    model: str,
+    url_checks: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
     schema = {
         "type": "object",
         "properties": {
@@ -150,7 +169,13 @@ Risk puanı üretme; puanı backend hesaplar. explanation alanını Türkçe, en
             json={
                 "model": model,
                 "instructions": instructions,
-                "input": "<untrusted_message>\n" + text + "\n</untrusted_message>",
+                "input": (
+                    "VirusTotal URL kontrolleri (güvenilir makine verisi):\n"
+                    + json.dumps(url_checks or [], ensure_ascii=False, separators=(",", ":"))
+                    + "\n<untrusted_message>\n"
+                    + text
+                    + "\n</untrusted_message>"
+                ),
                 "text": {
                     "format": {
                         "type": "json_schema",
@@ -203,7 +228,45 @@ def _fallback_explanation(status: str, reasons: list[str]) -> str:
     return f"Mesaj phishing açısından dikkat gerektiriyor. {evidence} Bağlantılara tıklamayın ve istenen bilgileri paylaşmayın."
 
 
-def analyze_text_message(text: str, api_key: str, model: str) -> TextAnalysis:
+def _apply_virustotal_risk(
+    risk: int,
+    status: str,
+    reasons: list[str],
+    breakdown: dict[str, int],
+    url_checks: list[dict[str, Any]],
+) -> tuple[int, str, list[str], dict[str, int]]:
+    malicious = 0
+    suspicious = 0
+    for check in url_checks:
+        stats = check.get("virustotal", {}).get("stats", {})
+        malicious += int(stats.get("malicious", 0) or 0)
+        suspicious += int(stats.get("suspicious", 0) or 0)
+
+    if malicious:
+        if reasons == ["Belirgin bir phishing dili sinyali bulunamadı."]:
+            reasons.clear()
+        points = min(50, malicious * 10)
+        breakdown["virustotal_malicious"] = points
+        reasons.append(f"VirusTotal: Mesajdaki bağlantılar {malicious} motor tarafından zararlı işaretlendi.")
+    if suspicious:
+        if reasons == ["Belirgin bir phishing dili sinyali bulunamadı."]:
+            reasons.clear()
+        points = min(20, suspicious * 5)
+        breakdown["virustotal_suspicious"] = points
+        reasons.append(f"VirusTotal: Mesajdaki bağlantılar {suspicious} motor tarafından şüpheli işaretlendi.")
+
+    risk = min(100, sum(breakdown.values()))
+    status = "dangerous" if risk >= 60 else "suspicious" if risk > 0 else "safe"
+    return risk, status, reasons, breakdown
+
+
+def analyze_text_message(
+    text: str,
+    api_key: str,
+    model: str,
+    url_checks: Optional[list[dict[str, Any]]] = None,
+) -> TextAnalysis:
+    url_checks = url_checks or []
     signals = _keyword_signals(text)
     ai_used = False
     ai_error = None
@@ -211,7 +274,7 @@ def analyze_text_message(text: str, api_key: str, model: str) -> TextAnalysis:
 
     if api_key:
         try:
-            ai_result = _analyze_with_ai(text, api_key, model)
+            ai_result = _analyze_with_ai(text, api_key, model, url_checks)
             for name in SIGNAL_LABELS:
                 signals[name] = signals[name] or bool(ai_result.get(name, False))
             ai_explanation = str(ai_result.get("explanation", "")).strip()
@@ -222,6 +285,9 @@ def analyze_text_message(text: str, api_key: str, model: str) -> TextAnalysis:
         ai_error = "OPENAI_API_KEY backend/.env içinde tanımlanmalı."
 
     risk, status, reasons, risk_breakdown = _score(signals)
+    risk, status, reasons, risk_breakdown = _apply_virustotal_risk(
+        risk, status, reasons, risk_breakdown, url_checks
+    )
     if not ai_explanation:
         ai_explanation = _fallback_explanation(status, reasons)
     return TextAnalysis(
@@ -230,6 +296,7 @@ def analyze_text_message(text: str, api_key: str, model: str) -> TextAnalysis:
         reasons=reasons,
         signals=signals,
         risk_breakdown=risk_breakdown,
+        url_checks=url_checks,
         ai_explanation=ai_explanation,
         ai_used=ai_used,
         ai_error=ai_error,
