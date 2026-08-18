@@ -49,3 +49,33 @@ class AIExplanationRequest(InternalAnalysisRequest):
     whois: dict[str, Any] = Field(default_factory=dict)
     virustotal: dict[str, Any] = Field(default_factory=dict)
     brand_similarity: dict[str, Any] = Field(default_factory=dict)
+
+
+class TextAnalysisRequest(BaseModel):
+    text: str = Field(min_length=3, max_length=20_000)
+
+    @field_validator("text")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("Mesaj en az 3 karakter olmalı.")
+        return value
+
+
+class TextSignals(BaseModel):
+    urgency: bool = False
+    fear: bool = False
+    reward: bool = False
+    credential_request: bool = False
+    suspicious_link: bool = False
+
+
+class TextAnalysisResult(BaseModel):
+    risk: int = Field(ge=0, le=100)
+    status: Literal["safe", "suspicious", "dangerous"]
+    reasons: list[str]
+    signals: TextSignals
+    ai_explanation: str
+    ai_used: bool
+    ai_error: Optional[str] = None

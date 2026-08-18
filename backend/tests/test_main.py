@@ -97,3 +97,39 @@ def test_ai_failure_does_not_break_signal_workflow(monkeypatch):
     assert response.status_code == 200
     assert response.json()["ai_explanation"] is None
     assert response.json()["ai_error"] == "quota unavailable"
+
+
+def test_analyze_text_returns_result(monkeypatch):
+    from text_analyzer import TextAnalysis
+
+    monkeypatch.setattr(
+        main,
+        "analyze_text_message",
+        lambda *_args, **_kwargs: TextAnalysis(
+            risk=70,
+            status="dangerous",
+            reasons=["Mesaj korku veya hesap kaybı tehdidi kullanıyor."],
+            signals={
+                "urgency": True,
+                "fear": True,
+                "reward": False,
+                "credential_request": True,
+                "suspicious_link": False,
+            },
+            ai_explanation="Bu mesaj bilgi vermeniz için baskı kuruyor.",
+            ai_used=True,
+        ),
+    )
+
+    response = client.post("/analyze-text", json={"text": "Hesabınızı hemen doğrulayın."})
+
+    assert response.status_code == 200
+    assert response.json()["risk"] == 70
+    assert response.json()["status"] == "dangerous"
+    assert response.json()["signals"]["credential_request"] is True
+
+
+def test_analyze_text_rejects_blank_text():
+    response = client.post("/analyze-text", json={"text": "   "})
+
+    assert response.status_code == 422
