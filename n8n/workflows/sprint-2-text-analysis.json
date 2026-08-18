@@ -46,43 +46,66 @@
     },
     {
       "parameters": {
+        "jsCode": "const result = $json ?? {};\nif (Array.isArray(result.urls)) {\n  return [{ json: { urls: result.urls, warning: null } }];\n}\nconst message = result.error?.message ?? result.message ?? 'VirusTotal URL checks unavailable';\nreturn [{ json: { urls: [], warning: `VirusTotal adımı tamamlanamadı: ${message}` } }];"
+      },
+      "id": "9eae5895-5c9d-4ff0-a326-e73346588293",
+      "name": "Normalize URL Checks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [80, 120]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "http://host.docker.internal:8001/internal/text-analysis",
         "sendHeaders": true,
         "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { text: $('Validate Request').item.json.text, url_checks: $json.urls ?? [] } }}",
+        "jsonBody": "={{ { text: $('Validate Request').item.json.text, url_checks: $json.urls } }}",
         "options": {"timeout": 60000}
       },
       "id": "d6671358-26eb-4263-bd96-fae4239f466b",
       "name": "Text Risk and AI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [80, 120]
+      "position": [320, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $json ?? {};\nconst urlState = $('Normalize URL Checks').first().json;\nconst warnings = urlState.warning ? [urlState.warning] : [];\nif (typeof analysis.risk !== 'number' || !analysis.status || !Array.isArray(analysis.reasons)) {\n  const message = analysis.error?.message ?? analysis.message ?? 'Text analysis service unavailable';\n  return [{ json: { status_code: 502, body: { detail: 'Metin analiz workflow tamamlanamadı.', workflow_stage: 'text_risk_and_ai', workflow_error: message, workflow_warnings: warnings } } }];\n}\nreturn [{ json: { status_code: 200, body: { ...analysis, workflow_warnings: warnings } } }];"
+      },
+      "id": "4ba9d9f0-d38d-4b94-943a-18ae20f4db9b",
+      "name": "Finalize Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [560, 120]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {}
+        "responseBody": "={{ $json.body }}",
+        "options": {"responseCode": "={{ $json.status_code }}"}
       },
       "id": "449fda36-f44c-45e1-a45b-c328b4b4591f",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [320, 120]
+      "position": [800, 120]
     }
   ],
   "pinData": {},
   "connections": {
     "Webhook": {"main": [[{"node": "Validate Request", "type": "main", "index": 0}]]},
     "Validate Request": {"main": [[{"node": "VirusTotal URL Checks", "type": "main", "index": 0}]]},
-    "VirusTotal URL Checks": {"main": [[{"node": "Text Risk and AI", "type": "main", "index": 0}]]},
-    "Text Risk and AI": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
+    "VirusTotal URL Checks": {"main": [[{"node": "Normalize URL Checks", "type": "main", "index": 0}]]},
+    "Normalize URL Checks": {"main": [[{"node": "Text Risk and AI", "type": "main", "index": 0}]]},
+    "Text Risk and AI": {"main": [[{"node": "Finalize Response", "type": "main", "index": 0}]]},
+    "Finalize Response": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
   },
   "active": false,
-  "settings": {"executionOrder": "v1"},
+  "settings": {"executionOrder": "v1", "executionTimeout": 180},
   "versionId": "799a341e-0260-47be-a1ce-c42281cd21e9",
   "meta": {"templateCredsSetupCompleted": true},
   "tags": []

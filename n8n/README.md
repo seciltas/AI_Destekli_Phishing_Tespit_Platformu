@@ -26,13 +26,26 @@ Sprint 2 SMS/e-posta akışı:
 Webhook
   → Validate Request
   → VirusTotal URL Checks
+  → Normalize URL Checks
   → Text Risk and AI
+  → Finalize Response
   → Respond to Webhook
 ```
 
 Bu workflow mesajın içindeki en fazla 10 HTTP(S) adresini VirusTotal ile kontrol eder.
 Ardından mesajı ve URL sonuçlarını FastAPI'deki metin risk motoruna iletir. OpenAI
 kullanılamazsa anahtar kelime tabanlı analiz devam eder.
+
+### SMS/e-posta hata ve timeout davranışı
+
+- VirusTotal URL kontrolü en fazla 120 saniye bekler. Adım hata verirse workflow
+  durmaz; `Normalize URL Checks` boş URL listesi ve `workflow_warnings` uyarısı üretir.
+- Metin risk/AI adımı en fazla 60 saniye bekler. OpenAI hataları backend içindeki
+  yedek analiz tarafından karşılanır.
+- Metin analiz backend servisine hiç ulaşılamazsa `Finalize Response`, HTTP 502 ve
+  `workflow_stage` alanı olan açık bir hata gövdesi döndürür.
+- Workflow'un toplam çalışma süresi 180 saniyeyle sınırlıdır. FastAPI n8n
+  istemcisinin timeout değeri de aynı sınıra ayarlanmıştır.
 
 ## Node'ların görevleri
 
