@@ -67,13 +67,18 @@ def analyze_text_via_n8n(text: str) -> dict[str, Any]:
             webhook_url,
             json={"text": text},
             headers={"X-N8N-Secret": shared_secret},
-            timeout=120,
+            timeout=180,
         )
         response.raise_for_status()
         data = response.json()
         if not isinstance(data, dict):
             raise TypeError("n8n metin analizi nesne döndürmedi")
+        required_fields = {"risk", "status", "reasons", "signals", "ai_explanation"}
+        if not required_fields.issubset(data):
+            raise TypeError("n8n metin analizi zorunlu alanları döndürmedi")
         return data
+    except httpx.TimeoutException as exc:
+        raise N8nWorkflowError("n8n metin workflow zaman aşımına uğradı.") from exc
     except (httpx.HTTPError, TypeError, ValueError) as exc:
         raise N8nWorkflowError(
             f"n8n metin workflow çağrısı başarısız: {type(exc).__name__}"

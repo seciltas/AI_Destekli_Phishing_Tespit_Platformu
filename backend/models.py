@@ -91,3 +91,4 @@ class TextAnalysisResult(BaseModel):
     ai_explanation: str
     ai_used: bool
     ai_error: Optional[str] = None
+    workflow_warnings: list[str] = Field(default_factory=list)

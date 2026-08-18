@@ -65,7 +65,7 @@ def test_analyze_text_via_n8n(monkeypatch):
     assert result["risk"] == 80
     assert captured["json"] == {"text": "Acil mesaj"}
     assert captured["headers"]["X-N8N-Secret"] == "test-secret"
-    assert captured["timeout"] == 120
+    assert captured["timeout"] == 180
 
 
 def test_text_n8n_requires_configuration(monkeypatch):
@@ -78,3 +78,41 @@ def test_text_n8n_requires_configuration(monkeypatch):
         pass
     else:
         raise AssertionError("Eksik n8n metin ayarı kabul edilmemeliydi")
+
+
+def test_text_n8n_reports_timeout_clearly(monkeypatch):
+    monkeypatch.setenv("N8N_TEXT_WEBHOOK_URL", "http://localhost:5678/webhook/text")
+    monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
+    monkeypatch.setattr(
+        n8n_client.httpx,
+        "post",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(n8n_client.httpx.ReadTimeout("slow")),
+    )
+
+    try:
+        n8n_client.analyze_text_via_n8n("Acil mesaj")
+    except n8n_client.N8nWorkflowError as exc:
+        assert "zaman aşımı" in str(exc)
+    else:
+        raise AssertionError("n8n timeout hataya dönüşmeliydi")
+
+
+def test_text_n8n_rejects_incomplete_response(monkeypatch):
+    monkeypatch.setenv("N8N_TEXT_WEBHOOK_URL", "http://localhost:5678/webhook/text")
+    monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
+
+    class IncompleteResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"status": "dangerous"}
+
+    monkeypatch.setattr(n8n_client.httpx, "post", lambda *_args, **_kwargs: IncompleteResponse())
+
+    try:
+        n8n_client.analyze_text_via_n8n("Acil mesaj")
+    except n8n_client.N8nWorkflowError as exc:
+        assert "TypeError" in str(exc)
+    else:
+        raise AssertionError("Eksik workflow yanıtı kabul edilmemeliydi")
