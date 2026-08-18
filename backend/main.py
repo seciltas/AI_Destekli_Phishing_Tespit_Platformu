@@ -41,7 +41,6 @@ from n8n_client import (
 from repository import list_analyses, save_analysis
 from text_analyzer import analyze_text_message
 from telegram_notifier import notify_high_risk_analysis
-from telegram_notifier import notify_high_risk_analysis
 
 
 app = FastAPI(
