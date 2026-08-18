@@ -264,6 +264,7 @@ def analyze_text(payload: TextAnalysisRequest) -> TextAnalysisResult:
         status=result.status,
         reasons=result.reasons,
         signals=result.signals,
+        risk_breakdown=result.risk_breakdown,
         ai_explanation=result.ai_explanation,
         ai_used=result.ai_used,
         ai_error=result.ai_error,

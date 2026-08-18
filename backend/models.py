@@ -69,6 +69,8 @@ class TextSignals(BaseModel):
     reward: bool = False
     credential_request: bool = False
     suspicious_link: bool = False
+    impersonation: bool = False
+    payment_request: bool = False
 
 
 class TextAnalysisResult(BaseModel):
@@ -76,6 +78,7 @@ class TextAnalysisResult(BaseModel):
     status: Literal["safe", "suspicious", "dangerous"]
     reasons: list[str]
     signals: TextSignals
+    risk_breakdown: dict[str, int] = Field(default_factory=dict)
     ai_explanation: str
     ai_used: bool
     ai_error: Optional[str] = None
