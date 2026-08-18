@@ -42,6 +42,10 @@ class InternalAnalysisRequest(BaseModel):
     domain: str = Field(min_length=3, max_length=253)
 
 
+class TextUrlCheckRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=20_000)
+
+
 class AIExplanationRequest(InternalAnalysisRequest):
     domain_age_days: Optional[int] = None
     ssl_valid: Optional[bool] = None

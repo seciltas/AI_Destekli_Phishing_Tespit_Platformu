@@ -1,0 +1,5 @@
+Sayın müşterimiz, hesabınız güvenlik nedeniyle askıya alınacaktır.
+Hesabınızı hemen doğrulamak için 30 dakika içinde aşağıdaki bağlantıya tıklayın:
+http://hesap-dogrulama-ornek.test/giris
+
+İşlemi tamamlamazsanız hesabınıza erişiminiz kısıtlanacaktır.

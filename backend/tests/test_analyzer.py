@@ -2,6 +2,7 @@ from analyzer import (
     CollectedSignals,
     InvalidUrlError,
     analyze_brand_similarity,
+    analyze_text_urls,
     calculate_risk,
     levenshtein_distance,
     normalize_url,
@@ -72,3 +73,19 @@ def test_official_brand_domain_is_not_suspicious():
     result = analyze_brand_similarity("paypal.com")
     assert result["matched_brand"] == "paypal"
     assert result["suspicious"] is False
+
+
+def test_analyze_text_urls_extracts_unique_urls_and_checks_virustotal(monkeypatch):
+    monkeypatch.setattr(
+        "analyzer.collect_virustotal", lambda url: {"checked": url}
+    )
+
+    result = analyze_text_urls(
+        "Hemen https://example.com/a! ve https://example.com/a ile "
+        "https://phishing.example/login adreslerini kontrol edin."
+    )
+
+    assert result == [
+        {"url": "https://example.com/a", "virustotal": {"checked": "https://example.com/a"}},
+        {"url": "https://phishing.example/login", "virustotal": {"checked": "https://phishing.example/login"}},
+    ]
