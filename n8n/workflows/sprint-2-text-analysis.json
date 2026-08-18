@@ -1,0 +1,89 @@
+{
+  "id": "sprint2TextAnalysis",
+  "name": "Sprint 2 - SMS Email Phishing Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "phishing-text-analysis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1f26594c-45d5-41b8-bdaf-b586f0e00b60",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-640, 120],
+      "webhookId": "a17d0e29-330c-45c3-9307-c88f479ac59e"
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $('Webhook').first().json;\nconst provided = request.headers?.['x-n8n-secret'];\nif (!provided || provided !== $env.N8N_SHARED_SECRET) {\n  throw new Error('Unauthorized webhook request');\n}\nconst text = String(request.body?.text ?? '').trim();\nif (text.length < 3 || text.length > 20000) {\n  throw new Error('Text must contain between 3 and 20000 characters');\n}\nreturn [{ json: { text } }];"
+      },
+      "id": "49d81243-acde-4ea8-bec5-4810aef819f5",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-400, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/signals/text-urls",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { text: $('Validate Request').item.json.text } }}",
+        "options": {"timeout": 120000}
+      },
+      "id": "6469a554-528a-440b-a742-3b56b86cad7f",
+      "name": "VirusTotal URL Checks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-160, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/text-analysis",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { text: $('Validate Request').item.json.text, url_checks: $json.urls ?? [] } }}",
+        "options": {"timeout": 60000}
+      },
+      "id": "d6671358-26eb-4263-bd96-fae4239f466b",
+      "name": "Text Risk and AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [80, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "449fda36-f44c-45e1-a45b-c328b4b4591f",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [320, 120]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {"main": [[{"node": "Validate Request", "type": "main", "index": 0}]]},
+    "Validate Request": {"main": [[{"node": "VirusTotal URL Checks", "type": "main", "index": 0}]]},
+    "VirusTotal URL Checks": {"main": [[{"node": "Text Risk and AI", "type": "main", "index": 0}]]},
+    "Text Risk and AI": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "versionId": "799a341e-0260-47be-a1ce-c42281cd21e9",
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}

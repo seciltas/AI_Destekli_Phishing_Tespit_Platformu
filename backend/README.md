@@ -58,3 +58,5 @@ Temel endpoint'ler:
 `/analyze-text`, mesajdaki aciliyet, korku, ödül vaadi, kimlik bilgisi talebi ve
 şüpheli bağlantı sinyallerini döndürür. OpenAI kullanılamazsa anahtar kelime tabanlı
 yedek analiz devreye girer; bu durumda yanıttaki `ai_used` değeri `false` olur.
+`N8N_TEXT_ENABLED=true` olduğunda endpoint, SMS/e-posta n8n workflow'unu kullanarak
+metindeki URL'leri VirusTotal ile kontrol eder ve bu bulguları risk puanına ekler.

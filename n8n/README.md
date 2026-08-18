@@ -1,4 +1,4 @@
-# n8n — Sprint 1 URL analiz workflow'u
+# n8n — URL ve SMS/e-posta analiz workflow'ları
 
 ## n8n nedir?
 
@@ -19,6 +19,20 @@ Webhook
   → Combine Signals
   → Respond to Webhook
 ```
+
+Sprint 2 SMS/e-posta akışı:
+
+```text
+Webhook
+  → Validate Request
+  → VirusTotal URL Checks
+  → Text Risk and AI
+  → Respond to Webhook
+```
+
+Bu workflow mesajın içindeki en fazla 10 HTTP(S) adresini VirusTotal ile kontrol eder.
+Ardından mesajı ve URL sonuçlarını FastAPI'deki metin risk motoruna iletir. OpenAI
+kullanılamazsa anahtar kelime tabanlı analiz devam eder.
 
 ## Node'ların görevleri
 
@@ -62,6 +76,9 @@ Workflow otomatik import edilmemişse:
 3. `workflows/sprint-1-url-analysis.json` dosyasını seçin.
 4. Workflow'u açıp sağ üstten **Publish** düğmesine basın.
 
+SMS/e-posta workflow'u için aynı adımları
+`workflows/sprint-2-text-analysis.json` dosyasıyla tekrarlayın.
+
 Bu bilgisayarda workflow daha önce CLI ile import edilip yayınlandı.
 
 ## Üç farklı URL kavramı
@@ -74,6 +91,19 @@ FastAPI production URL'yi kullanır:
 
 ```text
 http://localhost:5678/webhook/phishing-url-analysis
+```
+
+SMS/e-posta production webhook adresi:
+
+```text
+http://localhost:5678/webhook/phishing-text-analysis
+```
+
+Backend `.env` ayarları:
+
+```env
+N8N_TEXT_ENABLED=true
+N8N_TEXT_WEBHOOK_URL=http://localhost:5678/webhook/phishing-text-analysis
 ```
 
 ## Tüm projeyi çalıştırma

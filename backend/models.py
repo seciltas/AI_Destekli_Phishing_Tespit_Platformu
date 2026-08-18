@@ -67,12 +67,18 @@ class TextAnalysisRequest(BaseModel):
         return value
 
 
+class InternalTextAnalysisRequest(TextAnalysisRequest):
+    url_checks: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
+
+
 class TextSignals(BaseModel):
     urgency: bool = False
     fear: bool = False
     reward: bool = False
     credential_request: bool = False
     suspicious_link: bool = False
+    impersonation: bool = False
+    payment_request: bool = False
 
 
 class TextAnalysisResult(BaseModel):
@@ -80,6 +86,8 @@ class TextAnalysisResult(BaseModel):
     status: Literal["safe", "suspicious", "dangerous"]
     reasons: list[str]
     signals: TextSignals
+    risk_breakdown: dict[str, int] = Field(default_factory=dict)
+    url_checks: list[dict[str, Any]] = Field(default_factory=list)
     ai_explanation: str
     ai_used: bool
     ai_error: Optional[str] = None
