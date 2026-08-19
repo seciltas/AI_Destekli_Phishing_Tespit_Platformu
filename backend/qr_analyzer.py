@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 
-MAX_QR_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_QR_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_QR_PIXELS = 20_000_000
 ALLOWED_QR_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
@@ -17,7 +17,7 @@ def decode_qr_url(image_bytes: bytes) -> str:
     if not image_bytes:
         raise QRDecodeError("QR görseli boş olamaz.")
     if len(image_bytes) > MAX_QR_IMAGE_BYTES:
-        raise QRDecodeError("QR görseli en fazla 5 MB olabilir.")
+        raise QRDecodeError("QR görseli en fazla 10 MB olabilir.")
 
     encoded = np.frombuffer(image_bytes, dtype=np.uint8)
     image = cv2.imdecode(encoded, cv2.IMREAD_GRAYSCALE)
