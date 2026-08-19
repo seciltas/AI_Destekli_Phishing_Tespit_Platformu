@@ -13,6 +13,7 @@ def test_health_reports_missing_database_configuration(monkeypatch):
 
     monkeypatch.setattr(main, "get_database_url", missing_database)
     monkeypatch.setattr(main, "n8n_is_enabled", lambda: False)
+    monkeypatch.setattr(main, "n8n_text_is_enabled", lambda: False)
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {
@@ -20,6 +21,7 @@ def test_health_reports_missing_database_configuration(monkeypatch):
         "database_configured": False,
         "database_connected": False,
         "n8n_enabled": False,
+        "n8n_text_enabled": False,
     }
 
 
@@ -172,7 +174,7 @@ def test_ai_failure_does_not_break_signal_workflow(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json()["ai_explanation"] is None
+    assert "Belirgin bir risk sinyali" in response.json()["ai_explanation"]
     assert response.json()["ai_error"] == "quota unavailable"
 
 

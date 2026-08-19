@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import httpx
 
-from ai_explainer import AIConfigurationError, AIServiceError
+from ai_explainer import AIConfigurationError, AIServiceError, _openai_error_message
 
 
 SIGNAL_LABELS = {
@@ -192,9 +192,7 @@ Risk puanı üretme; puanı backend hesaplar. explanation alanını Türkçe, en
         response.raise_for_status()
         return json.loads(_extract_output_text(response.json()))
     except httpx.HTTPStatusError as exc:
-        raise AIServiceError(
-            f"OpenAI metin analizi başarısız oldu (HTTP {exc.response.status_code})."
-        ) from exc
+        raise AIServiceError(_openai_error_message(exc.response)) from exc
     except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise AIServiceError(f"OpenAI metin analizi üretilemedi: {type(exc).__name__}") from exc
 

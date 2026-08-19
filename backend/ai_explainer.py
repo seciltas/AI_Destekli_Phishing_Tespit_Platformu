@@ -13,6 +13,10 @@ class AIServiceError(RuntimeError):
     pass
 
 
+class AIQuotaError(AIServiceError):
+    """Raised when the API project has no remaining OpenAI quota."""
+
+
 SYSTEM_INSTRUCTIONS = """
 Sen bir phishing farkındalık asistanısın. Sana verilen risk skoru ve teknik sinyaller
 başka bir güvenlik motoru tarafından hesaplanmıştır. Skoru değiştirme ve yeni teknik
@@ -94,6 +98,44 @@ def _generate_ollama_explanation(analysis_data: dict[str, Any]) -> str:
         raise AIServiceError(f"Ollama açıklaması üretilemedi: {type(exc).__name__}") from exc
 
 
+def fallback_ai_explanation(analysis_data: dict[str, Any]) -> str:
+    """Return a usable explanation when the optional AI service is unavailable."""
+    risk_status = str(analysis_data.get("risk_status", "suspicious"))
+    reasons = analysis_data.get("reasons", [])
+    evidence = next((str(reason) for reason in reasons if str(reason).strip()), "")
+
+    if risk_status == "safe":
+        return (
+            "Belirgin bir risk sinyali görülmedi. Yine de adresi ve göndereni "
+            "kontrol etmeden hassas bilgi paylaşmayın."
+        )
+    if evidence:
+        return (
+            f"Bu sonuç dikkat gerektiriyor: {evidence} Bağlantıya tıklamayın ve "
+            "istenen bilgileri doğrulanmış kanallardan kontrol edin."
+        )
+    return (
+        "Bu sonuç dikkat gerektiriyor. Bağlantıya tıklamayın ve istenen bilgileri "
+        "doğrulanmış kanallardan kontrol edin."
+    )
+
+
+def _openai_error_message(response: httpx.Response) -> str:
+    """Translate actionable OpenAI errors without exposing provider payloads."""
+    if response.status_code == 429:
+        try:
+            error_code = response.json().get("error", {}).get("code")
+        except (TypeError, ValueError):
+            error_code = None
+        if error_code == "insufficient_quota":
+            return (
+                "OpenAI API kotası kullanılamıyor. Platform hesabında faturalandırma "
+                "ve kredi durumunu kontrol edin; teknik analiz yedek modda sürdürüldü."
+            )
+        return "OpenAI istek limiti aşıldı; teknik analiz yedek modda sürdürüldü."
+    return f"OpenAI isteği başarısız oldu (HTTP {response.status_code})."
+
+
 def _generate_openai_explanation(analysis_data: dict[str, Any]) -> str:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     model = os.getenv("OPENAI_MODEL", "gpt-5-mini").strip()
@@ -124,8 +166,15 @@ def _generate_openai_explanation(analysis_data: dict[str, Any]) -> str:
         response.raise_for_status()
         return _extract_output_text(response.json())
     except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code
-        raise AIServiceError(f"OpenAI isteği başarısız oldu (HTTP {status_code}).") from exc
+        message = _openai_error_message(exc.response)
+        if exc.response.status_code == 429:
+            try:
+                is_quota = exc.response.json().get("error", {}).get("code") == "insufficient_quota"
+            except (TypeError, ValueError):
+                is_quota = False
+            if is_quota:
+                raise AIQuotaError(message) from exc
+        raise AIServiceError(message) from exc
     except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
         raise AIServiceError(f"OpenAI açıklaması üretilemedi: {type(exc).__name__}") from exc
 

@@ -60,3 +60,30 @@ Temel endpoint'ler:
 yedek analiz devreye girer; bu durumda yanıttaki `ai_used` değeri `false` olur.
 `N8N_TEXT_ENABLED=true` olduğunda endpoint, SMS/e-posta n8n workflow'unu kullanarak
 metindeki URL'leri VirusTotal ile kontrol eder ve bu bulguları risk puanına ekler.
+
+## Sprint 2 gerçek uçtan uca testi
+
+Bu test mock kullanmaz: çalışan FastAPI'ye istek gönderir; `N8N_TEXT_ENABLED=true`
+ise istek n8n webhook'una, oradan da backend'in iç metin analizi uç noktasına gider.
+Önce n8n ve FastAPI'yi `n8n/README.md` yönergeleriyle başlatın, sonra ayrı bir
+terminalde çalıştırın:
+
+```powershell
+cd backend
+$env:SPRINT2_E2E_BASE_URL="http://127.0.0.1:8001"
+.\venv\Scripts\python.exe -m pytest -m e2e -q
+```
+
+Başarılı sonuç, `n8n_text_enabled: true` ile `status`, 0–100 arası `risk`, nedenler,
+kullanıcı açıklaması ve `workflow_warnings` alanlarının gerçek servis zincirinden
+geldiğini doğrular.
+`SPRINT2_E2E_BASE_URL` tanımlı değilse bu test varsayılan test koşumunda atlanır.
+
+## OpenAI API kotası
+
+`insufficient_quota`, API projesinde faturalandırma/kredi bulunmadığını gösterir;
+ChatGPT aboneliği API kredisi değildir. OpenAI hesabında billing ve proje bütçesini
+etkinleştirdikten sonra backend'i yeniden başlatın. Kota veya geçici istek limiti
+olmadığında platform risk hesaplamasını durdurmaz: anahtar kelime tabanlı analiz ve
+deterministik Türkçe açıklama döner, yanıttaki `ai_used` alanı `false`, `ai_error`
+alanı ise neden olur. OpenAI API anahtarını yalnızca backend `.env` dosyasında tutun.
