@@ -3,7 +3,7 @@ import axios from "axios";
 import RiskGauge from "./RiskGauge";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8001";
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 function QrAnalysis() {
@@ -29,7 +29,7 @@ function QrAnalysis() {
       return;
     }
     if (selected.size > MAX_FILE_BYTES) {
-      setError("QR görseli en fazla 5 MB olabilir.");
+      setError("QR görseli en fazla 10 MB olabilir.");
       return;
     }
     setFile(selected);
