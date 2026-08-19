@@ -230,8 +230,9 @@ yeniden başlatın.
 
 `backend/.env` içinde `OPENAI_API_KEY` ve `OPENAI_MODEL` tanımlı olmalıdır. OpenAI
 `insufficient_quota` döndürüyorsa API hesabında billing/kredi etkin değildir. ChatGPT
-aboneliği OpenAI API kredisinden ayrıdır. Kota yokken URL analizi çalışmaya devam eder,
-ancak `ai_explanation` boş ve n8n execution çıktısındaki `ai_error` dolu olur.
+aboneliği OpenAI API kredisinden ayrıdır. Kota yokken URL analizi çalışmaya devam eder;
+backend deterministik bir Türkçe açıklama üretir ve n8n execution çıktısındaki
+`ai_error` alanı faturalandırma/kredi kontrolü gerektiğini belirtir.
 
 ### Analiz uzun sürüyor
 

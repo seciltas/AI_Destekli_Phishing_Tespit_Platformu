@@ -20,7 +20,12 @@ from analyzer import (
     ensure_public_destination,
     normalize_url,
 )
-from ai_explainer import AIConfigurationError, AIServiceError, generate_ai_explanation
+from ai_explainer import (
+    AIConfigurationError,
+    AIServiceError,
+    fallback_ai_explanation,
+    generate_ai_explanation,
+)
 from database import DatabaseConfigurationError, database_is_connected, get_database_url
 from models import (
     AIExplanationRequest,
@@ -84,6 +89,7 @@ def health() -> HealthResponse:
         database_configured=database_configured,
         database_connected=database_connected,
         n8n_enabled=n8n_is_enabled(),
+        n8n_text_enabled=n8n_text_is_enabled(),
     )
 
 
@@ -186,7 +192,7 @@ def internal_ai_explanation(payload: AIExplanationRequest) -> dict[str, Any]:
             "risk": score,
             "status": risk_status,
             "reasons": reasons,
-            "ai_explanation": None,
+            "ai_explanation": fallback_ai_explanation(explanation_input),
             "ai_error": str(exc),
         }
     except AIServiceError as exc:
@@ -194,7 +200,7 @@ def internal_ai_explanation(payload: AIExplanationRequest) -> dict[str, Any]:
             "risk": score,
             "status": risk_status,
             "reasons": reasons,
-            "ai_explanation": None,
+            "ai_explanation": fallback_ai_explanation(explanation_input),
             "ai_error": str(exc),
         }
 

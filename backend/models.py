@@ -35,6 +35,7 @@ class HealthResponse(BaseModel):
     database_configured: bool
     database_connected: bool
     n8n_enabled: bool
+    n8n_text_enabled: bool
 
 
 class InternalAnalysisRequest(BaseModel):
