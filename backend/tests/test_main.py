@@ -61,6 +61,39 @@ def test_analyze_rejects_invalid_url(monkeypatch):
     assert response.json() == {"detail": "Geçersiz URL"}
 
 
+def test_analyze_qr_decodes_and_uses_existing_url_flow(monkeypatch):
+    monkeypatch.setattr(main, "decode_qr_url", lambda _: "https://example.com")
+    monkeypatch.setattr(
+        main,
+        "analyze",
+        lambda payload: main.AnalysisResult(
+            id=12,
+            url=payload.url,
+            domain="example.com",
+            risk=0,
+            status="safe",
+            reasons=["Belirgin bir risk sinyali bulunamadı"],
+        ),
+    )
+
+    response = client.post(
+        "/analyze-qr",
+        files={"file": ("qr.png", b"image-data", "image/png")},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["url"] == "https://example.com"
+
+
+def test_analyze_qr_rejects_unsupported_file_type():
+    response = client.post(
+        "/analyze-qr",
+        files={"file": ("qr.svg", b"<svg />", "image/svg+xml")},
+    )
+
+    assert response.status_code == 415
+
+
 def test_analyze_sends_telegram_notification_above_80(monkeypatch):
     monkeypatch.setattr(main, "n8n_is_enabled", lambda: False)
     signals = CollectedSignals(

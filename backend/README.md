@@ -52,6 +52,7 @@ Temel endpoint'ler:
 
 - `GET /health`
 - `POST /analyze` — gövde: `{"url": "https://example.com"}`
+- `POST /analyze-qr` — `multipart/form-data` içinde `file` alanıyla PNG/JPEG/WebP QR görseli
 - `POST /analyze-text` — gövde: `{"text": "Acil, hesabınızı doğrulayın."}`
 - `GET /analyses?limit=50`
 
