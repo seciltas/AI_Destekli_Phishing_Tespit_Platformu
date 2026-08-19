@@ -17,6 +17,9 @@ Webhook
   → Brand Similarity
   → VirusTotal
   → Combine Signals
+  → AI Explanation
+  → Finalize Result
+  → Telegram Notification
   → Respond to Webhook
 ```
 
@@ -29,6 +32,7 @@ Webhook
   → Normalize URL Checks
   → Text Risk and AI
   → Finalize Response
+  → Telegram Notification
   → Respond to Webhook
 ```
 
@@ -46,6 +50,9 @@ kullanılamazsa anahtar kelime tabanlı analiz devam eder.
   `workflow_stage` alanı olan açık bir hata gövdesi döndürür.
 - Workflow'un toplam çalışma süresi 180 saniyeyle sınırlıdır. FastAPI n8n
   istemcisinin timeout değeri de aynı sınıra ayarlanmıştır.
+- `Telegram Notification`, risk 80'den büyükse bildirim yollar. Telegram ayarları
+  eksikse veya servis hata verirse analiz sonucu yine kullanıcıya döner. SMS/e-posta
+  mesajının içeriği Telegram'a gönderilmez.
 
 ## Node'ların görevleri
 
@@ -60,7 +67,8 @@ kullanılamazsa anahtar kelime tabanlı analiz devam eder.
 8. **AI Explanation:** Risk verilerini OpenAI'a göndererek en fazla üç kısa Türkçe
    cümleden oluşan kullanıcı açıklaması üretir. API kullanılamazsa teknik analiz devam eder.
 9. **Finalize Result:** Teknik sinyaller ile AI açıklamasını tek JSON'da birleştirir.
-10. **Respond to Webhook:** JSON sonucunu FastAPI'ye geri gönderir.
+10. **Telegram Notification:** Risk 80'den büyükse Telegram uyarısı gönderir.
+11. **Respond to Webhook:** JSON sonucunu FastAPI'ye geri gönderir.
 
 ## İlk kurulum
 

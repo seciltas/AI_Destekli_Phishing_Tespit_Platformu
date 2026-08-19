@@ -39,6 +39,8 @@ function TextAnalysis() {
       {result.risk != null && <RiskGauge risk={result.risk} status={result.status ?? "suspicious"} />}
       <div><h3>{result.status === "dangerous" ? "Yüksek riskli mesaj" : "Metin analizi sonucu"}</h3><p>{result.ai_explanation ?? result.explanation ?? result.summary}</p>
         {result.reasons?.length > 0 && <ul className="reason-list">{result.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+        {result.url_checks?.length > 0 && <p className="muted">{result.url_checks.length} bağlantı VirusTotal adımından geçirildi.</p>}
+        {result.workflow_warnings?.length > 0 && <aside className="workflow-warning" role="status"><strong>Bazı kontroller tamamlanamadı</strong><ul>{result.workflow_warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></aside>}
       </div>
     </div>}
   </section>;

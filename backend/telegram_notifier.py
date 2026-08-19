@@ -14,10 +14,9 @@ def telegram_is_configured() -> bool:
     )
 
 
-def notify_high_risk_analysis(
-    *, url: str, domain: str, risk: int, reasons: list[str]
+def _send_high_risk_notification(
+    *, risk: int, reasons: list[str], detail_lines: list[str]
 ) -> dict[str, Any]:
-    """Yüksek risk bildirimi yollar; bildirim hatası analiz akışını durdurmaz."""
     if risk <= HIGH_RISK_THRESHOLD:
         return {"sent": False, "reason": "risk_below_threshold"}
 
@@ -30,8 +29,7 @@ def notify_high_risk_analysis(
         [
             "⚠️ Yüksek riskli phishing analizi",
             f"Risk skoru: {risk}/100",
-            f"Alan adı: {domain}",
-            f"URL: {url}",
+            *detail_lines,
             "Nedenler: " + "; ".join(reasons[:3]),
         ]
     )
@@ -45,3 +43,23 @@ def notify_high_risk_analysis(
         return {"sent": True}
     except httpx.HTTPError as exc:
         return {"sent": False, "reason": type(exc).__name__}
+
+
+def notify_high_risk_analysis(
+    *, url: str, domain: str, risk: int, reasons: list[str]
+) -> dict[str, Any]:
+    """Yüksek riskli URL için Telegram bildirimi yollar."""
+    return _send_high_risk_notification(
+        risk=risk,
+        reasons=reasons,
+        detail_lines=[f"Tür: URL", f"Alan adı: {domain}", f"URL: {url}"],
+    )
+
+
+def notify_high_risk_text_analysis(*, risk: int, reasons: list[str]) -> dict[str, Any]:
+    """Mesaj içeriğini paylaşmadan yüksek riskli metin bildirimi yollar."""
+    return _send_high_risk_notification(
+        risk=risk,
+        reasons=reasons,
+        detail_lines=["Tür: SMS/E-posta"],
+    )

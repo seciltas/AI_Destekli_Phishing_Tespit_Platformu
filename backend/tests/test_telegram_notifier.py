@@ -50,3 +50,28 @@ def test_telegram_failure_does_not_raise(monkeypatch):
     )
 
     assert result == {"sent": False, "reason": "ConnectError"}
+
+
+def test_text_notification_contains_only_risk_type_and_reasons(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    sent: dict = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+    def fake_post(_url, **kwargs):
+        sent.update(kwargs)
+        return Response()
+
+    monkeypatch.setattr(telegram_notifier.httpx, "post", fake_post)
+    result = telegram_notifier.notify_high_risk_text_analysis(
+        risk=95,
+        reasons=["Parola talebi"],
+    )
+
+    assert result == {"sent": True}
+    assert "SMS/E-posta" in sent["json"]["text"]
+    assert "95/100" in sent["json"]["text"]
+    assert "Parola talebi" in sent["json"]["text"]
