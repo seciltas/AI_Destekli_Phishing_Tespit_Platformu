@@ -1,4 +1,10 @@
 import text_analyzer
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def use_openai_provider(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "openai")
 
 
 class FakeResponse:
@@ -155,3 +161,76 @@ def test_virustotal_findings_raise_text_risk():
     assert result.risk_breakdown["virustotal_suspicious"] == 5
     assert result.url_checks[0]["url"] == "https://bad.example"
     assert any("VirusTotal" in reason for reason in result.reasons)
+
+
+def test_ollama_analysis_uses_local_chat_api(monkeypatch):
+    captured = {}
+
+    class OllamaResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "message": {
+                    "content": (
+                        '{"urgency":false,"fear":false,"reward":true,'
+                        '"credential_request":false,"suspicious_link":false,'
+                        '"impersonation":false,"payment_request":false,'
+                        '"explanation":"Mesaj ödül vaadinde bulunuyor."}'
+                    )
+                }
+            }
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs["json"])
+        return OllamaResponse()
+
+    monkeypatch.setenv("AI_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_MODEL", "qwen2.5:3b")
+    monkeypatch.setattr(text_analyzer.httpx, "post", fake_post)
+
+    result = text_analyzer.analyze_text_message(
+        "Tebrikler, bir ödül kazandınız.", api_key="", model="unused"
+    )
+
+    assert result.ai_used is True
+    assert result.signals["reward"] is True
+    assert captured["url"].endswith("/api/chat")
+    assert captured["format"]["additionalProperties"] is False
+
+
+def test_unsafe_ai_advice_is_replaced_with_safe_fallback(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "ollama")
+    monkeypatch.setattr(
+        text_analyzer,
+        "_analyze_with_ollama",
+        lambda *_: {
+            **{name: False for name in text_analyzer.SIGNAL_LABELS},
+            "credential_request": True,
+            "explanation": "Hesabınızı açmak için şifrenizi girin.",
+        },
+    )
+
+    result = text_analyzer.analyze_text_message(
+        "Şifrenizi doğrulayın.", api_key="", model="unused"
+    )
+
+    assert result.ai_used is True
+    assert "şifrenizi girin" not in result.ai_explanation.casefold()
+    assert "paylaşmayın" in result.ai_explanation.casefold()
+
+
+def test_ai_explanation_is_deduplicated_and_limited_to_three_sentences():
+    explanation = "Birinci cümle. İkinci cümle. İkinci cümle. Üçüncü cümle. Dördüncü cümle."
+
+    result = text_analyzer._sanitize_ai_explanation(explanation)
+
+    assert result == "Birinci cümle. İkinci cümle. Üçüncü cümle."
+
+
+def test_absolute_safety_claim_is_rejected():
+    assert text_analyzer._sanitize_ai_explanation("Bu mesaj tamamen güvenilir.") == ""

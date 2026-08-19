@@ -140,15 +140,33 @@
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/notifications/telegram",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { analysis_type: 'url', risk: $json.risk ?? 0, reasons: $json.reasons ?? [], url: $json.url, domain: $json.domain } }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "799c1f7e-6b91-4aa8-9637-a3fd79a449da",
+      "name": "Telegram Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $json }}",
+        "responseBody": "={{ $('Finalize Result').item.json }}",
         "options": {}
       },
       "id": "0b47e79e-c21f-40cb-8c84-39ac52f5f1cc",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [1340, 120]
+      "position": [1580, 120]
     }
   ],
   "pinData": {},
@@ -161,7 +179,8 @@
     "VirusTotal": {"main": [[{"node": "Combine Signals", "type": "main", "index": 0}]]},
     "Combine Signals": {"main": [[{"node": "AI Explanation", "type": "main", "index": 0}]]},
     "AI Explanation": {"main": [[{"node": "Finalize Result", "type": "main", "index": 0}]]},
-    "Finalize Result": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
+    "Finalize Result": {"main": [[{"node": "Telegram Notification", "type": "main", "index": 0}]]},
+    "Telegram Notification": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
   },
   "active": false,
   "settings": {"executionOrder": "v1"},

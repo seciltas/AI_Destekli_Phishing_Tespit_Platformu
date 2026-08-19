@@ -84,15 +84,33 @@
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8001/internal/notifications/telegram",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-N8N-Secret", "value": "={{ $env.N8N_SHARED_SECRET }}"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { analysis_type: 'text', risk: $json.body.risk ?? 0, reasons: $json.body.reasons ?? [] } }}",
+        "options": {"timeout": 15000}
+      },
+      "id": "3ea0168b-a114-48ec-b98a-e9f6748e52dd",
+      "name": "Telegram Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $json.body }}",
-        "options": {"responseCode": "={{ $json.status_code }}"}
+        "responseBody": "={{ $('Finalize Response').item.json.body }}",
+        "options": {"responseCode": "={{ $('Finalize Response').item.json.status_code }}"}
       },
       "id": "449fda36-f44c-45e1-a45b-c328b4b4591f",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [800, 120]
+      "position": [1040, 120]
     }
   ],
   "pinData": {},
@@ -102,7 +120,8 @@
     "VirusTotal URL Checks": {"main": [[{"node": "Normalize URL Checks", "type": "main", "index": 0}]]},
     "Normalize URL Checks": {"main": [[{"node": "Text Risk and AI", "type": "main", "index": 0}]]},
     "Text Risk and AI": {"main": [[{"node": "Finalize Response", "type": "main", "index": 0}]]},
-    "Finalize Response": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
+    "Finalize Response": {"main": [[{"node": "Telegram Notification", "type": "main", "index": 0}]]},
+    "Telegram Notification": {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
   },
   "active": false,
   "settings": {"executionOrder": "v1", "executionTimeout": 180},

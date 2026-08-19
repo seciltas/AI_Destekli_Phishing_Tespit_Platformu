@@ -92,3 +92,11 @@ class TextAnalysisResult(BaseModel):
     ai_used: bool
     ai_error: Optional[str] = None
     workflow_warnings: list[str] = Field(default_factory=list)
+
+
+class TelegramNotificationRequest(BaseModel):
+    analysis_type: Literal["url", "text"]
+    risk: int = Field(ge=0, le=100)
+    reasons: list[str] = Field(default_factory=list, max_length=20)
+    url: Optional[str] = Field(default=None, max_length=2048)
+    domain: Optional[str] = Field(default=None, max_length=253)

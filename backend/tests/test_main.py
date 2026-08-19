@@ -91,6 +91,33 @@ def test_analyze_sends_telegram_notification_above_80(monkeypatch):
     assert notification["domain"] == "bad.example"
 
 
+def test_analyze_does_not_duplicate_telegram_when_n8n_is_enabled(monkeypatch):
+    monkeypatch.setattr(main, "n8n_is_enabled", lambda: True)
+    monkeypatch.setattr(main, "normalize_url", lambda _: ("https://bad.example", "bad.example"))
+    monkeypatch.setattr(main, "ensure_public_destination", lambda _: None)
+    signals = CollectedSignals(
+        url="https://bad.example",
+        domain="bad.example",
+        domain_age_days=1,
+        ssl_valid=False,
+        dns_data={},
+        whois_data={},
+        virustotal_data={"stats": {"malicious": 5}},
+        brand_similarity_data={"suspicious": False},
+    )
+    monkeypatch.setattr(main, "collect_signals_via_n8n", lambda *_: signals)
+    monkeypatch.setattr(main, "save_analysis", lambda **_: {"id": 9})
+    monkeypatch.setattr(
+        main,
+        "notify_high_risk_analysis",
+        lambda **_: (_ for _ in ()).throw(AssertionError("duplicate notification")),
+    )
+
+    response = client.post("/analyze", json={"url": "https://bad.example"})
+
+    assert response.status_code == 201
+
+
 def test_internal_endpoint_requires_n8n_secret():
     response = client.post(
         "/internal/signals/dns",
@@ -184,6 +211,37 @@ def test_analyze_text_returns_result(monkeypatch):
     assert response.json()["signals"]["credential_request"] is True
 
 
+def test_direct_text_analysis_sends_high_risk_fallback_notification(monkeypatch):
+    from text_analyzer import TextAnalysis
+
+    monkeypatch.setattr(main, "n8n_text_is_enabled", lambda: False)
+    monkeypatch.setattr(main, "analyze_text_urls", lambda _: [])
+    monkeypatch.setattr(
+        main,
+        "analyze_text_message",
+        lambda *_args, **_kwargs: TextAnalysis(
+            risk=90,
+            status="dangerous",
+            reasons=["Parola talebi"],
+            signals={},
+            risk_breakdown={"credential_request": 30},
+            ai_explanation="Riskli mesaj.",
+            ai_used=False,
+        ),
+    )
+    notification = {}
+    monkeypatch.setattr(
+        main,
+        "notify_high_risk_text_analysis",
+        lambda **kwargs: notification.update(kwargs),
+    )
+
+    response = client.post("/analyze-text", json={"text": "Parolanızı hemen paylaşın."})
+
+    assert response.status_code == 200
+    assert notification == {"risk": 90, "reasons": ["Parola talebi"]}
+
+
 def test_analyze_text_uses_n8n_workflow_when_enabled(monkeypatch):
     monkeypatch.setattr(main, "n8n_text_is_enabled", lambda: True)
     monkeypatch.setattr(
@@ -227,6 +285,30 @@ def test_internal_text_analysis_requires_n8n_secret():
     )
 
     assert response.status_code == 401
+
+
+def test_internal_telegram_notification_routes_text_without_content(monkeypatch):
+    monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
+    captured = {}
+    monkeypatch.setattr(
+        main,
+        "notify_high_risk_text_analysis",
+        lambda **kwargs: captured.update(kwargs) or {"sent": True},
+    )
+
+    response = client.post(
+        "/internal/notifications/telegram",
+        headers={"X-N8N-Secret": "test-secret"},
+        json={
+            "analysis_type": "text",
+            "risk": 95,
+            "reasons": ["Parola talebi"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"sent": True}
+    assert captured == {"risk": 95, "reasons": ["Parola talebi"]}
 
 
 def test_analyze_text_rejects_blank_text():

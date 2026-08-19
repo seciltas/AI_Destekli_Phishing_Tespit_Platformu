@@ -29,6 +29,7 @@ from models import (
     HealthResponse,
     InternalTextAnalysisRequest,
     InternalAnalysisRequest,
+    TelegramNotificationRequest,
     TextAnalysisRequest,
     TextAnalysisResult,
     TextUrlCheckRequest,
@@ -43,7 +44,7 @@ from n8n_client import (
 )
 from repository import list_analyses, save_analysis
 from text_analyzer import analyze_text_message
-from telegram_notifier import notify_high_risk_analysis
+from telegram_notifier import notify_high_risk_analysis, notify_high_risk_text_analysis
 
 
 app = FastAPI(
@@ -51,10 +52,19 @@ app = FastAPI(
     version="0.2.0",
 )
 
-frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+frontend_origins = {
+    origin.strip()
+    for origin in os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").split(",")
+    if origin.strip()
+}
+# Yerel geliştirmede tarayıcı localhost ve 127.0.0.1 adreslerini farklı origin sayar.
+if "http://localhost:5173" in frontend_origins:
+    frontend_origins.add("http://127.0.0.1:5173")
+if "http://127.0.0.1:5173" in frontend_origins:
+    frontend_origins.add("http://localhost:5173")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin],
+    allow_origins=sorted(frontend_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -155,6 +165,21 @@ def internal_text_analysis(payload: InternalTextAnalysisRequest) -> TextAnalysis
     return TextAnalysisResult(**result.to_dict())
 
 
+@app.post(
+    "/internal/notifications/telegram",
+    dependencies=[Depends(require_n8n_secret)],
+)
+def internal_telegram_notification(payload: TelegramNotificationRequest) -> dict[str, Any]:
+    if payload.analysis_type == "text":
+        return notify_high_risk_text_analysis(risk=payload.risk, reasons=payload.reasons)
+    return notify_high_risk_analysis(
+        url=payload.url or "-",
+        domain=payload.domain or "-",
+        risk=payload.risk,
+        reasons=payload.reasons,
+    )
+
+
 @app.post("/internal/ai-explanation", dependencies=[Depends(require_n8n_secret)])
 def internal_ai_explanation(payload: AIExplanationRequest) -> dict[str, Any]:
     url, domain = validate_internal_target(payload)
@@ -212,8 +237,9 @@ def internal_ai_explanation(payload: AIExplanationRequest) -> dict[str, Any]:
     status_code=status.HTTP_201_CREATED,
 )
 def analyze(payload: AnalyzeRequest) -> AnalysisResult:
+    use_n8n = n8n_is_enabled()
     try:
-        if n8n_is_enabled():
+        if use_n8n:
             normalized_url, domain = normalize_url(payload.url)
             ensure_public_destination(domain)
             signals = collect_signals_via_n8n(normalized_url, domain)
@@ -235,13 +261,14 @@ def analyze(payload: AnalyzeRequest) -> AnalysisResult:
             reasons=reasons,
             ai_explanation=signals.ai_explanation,
         )
-        # Telegram kesintisi analiz sonucunu veya veritabanı kaydını etkilemez.
-        notify_high_risk_analysis(
-            url=signals.url,
-            domain=signals.domain,
-            risk=score,
-            reasons=reasons,
-        )
+        if not use_n8n:
+            # n8n kapalıyken bildirim doğrudan gönderilir; çift bildirim oluşmaz.
+            notify_high_risk_analysis(
+                url=signals.url,
+                domain=signals.domain,
+                risk=score,
+                reasons=reasons,
+            )
     except InvalidUrlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (DatabaseConfigurationError, N8nConfigurationError) as exc:
@@ -302,4 +329,5 @@ def analyze_text(payload: TextAnalysisRequest) -> TextAnalysisResult:
         model=os.getenv("OPENAI_MODEL", "gpt-5-mini").strip(),
         url_checks=url_checks,
     )
+    notify_high_risk_text_analysis(risk=result.risk, reasons=result.reasons)
     return TextAnalysisResult(**result.to_dict())
