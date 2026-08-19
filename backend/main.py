@@ -5,6 +5,7 @@ from typing import Any, Optional
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from analyzer import (
     CollectedSignals,
@@ -45,7 +46,9 @@ from n8n_client import (
     analyze_text_via_n8n,
     collect_signals_via_n8n,
     n8n_is_enabled,
+    n8n_qr_is_enabled,
     n8n_text_is_enabled,
+    prepare_qr_url_via_n8n,
 )
 from repository import list_analyses, save_analysis
 from qr_analyzer import (
@@ -106,6 +109,7 @@ def health() -> HealthResponse:
         database_connected=database_connected,
         n8n_enabled=n8n_is_enabled(),
         n8n_text_enabled=n8n_text_is_enabled(),
+        n8n_qr_enabled=n8n_qr_is_enabled(),
     )
 
 
@@ -327,7 +331,14 @@ async def analyze_qr(file: UploadFile = File(...)) -> AnalysisResult:
         url = decode_qr_url(image_bytes)
     except QRDecodeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return analyze(AnalyzeRequest(url=url))
+    if n8n_qr_is_enabled():
+        try:
+            url = prepare_qr_url_via_n8n(url)
+        except N8nConfigurationError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except N8nWorkflowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return await run_in_threadpool(analyze, AnalyzeRequest(url=url))
 
 
 @app.get("/analyses")

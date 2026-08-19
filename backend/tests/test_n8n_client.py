@@ -116,3 +116,52 @@ def test_text_n8n_rejects_incomplete_response(monkeypatch):
         assert "TypeError" in str(exc)
     else:
         raise AssertionError("Eksik workflow yanıtı kabul edilmemeliydi")
+
+
+def test_prepare_qr_url_via_n8n(monkeypatch):
+    captured = {}
+    monkeypatch.setenv("N8N_QR_WEBHOOK_URL", "http://localhost:5678/webhook/qr")
+    monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
+
+    class QrResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"url": "https://example.com/from-qr", "source": "qr"}
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return QrResponse()
+
+    monkeypatch.setattr(n8n_client.httpx, "post", fake_post)
+
+    result = n8n_client.prepare_qr_url_via_n8n("https://example.com/from-qr")
+
+    assert result == "https://example.com/from-qr"
+    assert captured["json"]["source"] == "qr"
+    assert captured["params"] == {"url": "https://example.com/from-qr"}
+    assert captured["headers"]["X-N8N-Secret"] == "test-secret"
+    assert captured["timeout"] == 30
+
+
+def test_qr_n8n_rejects_invalid_response(monkeypatch):
+    monkeypatch.setenv("N8N_QR_WEBHOOK_URL", "http://localhost:5678/webhook/qr")
+    monkeypatch.setenv("N8N_SHARED_SECRET", "test-secret")
+
+    class InvalidResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"source": "qr"}
+
+    monkeypatch.setattr(n8n_client.httpx, "post", lambda *_args, **_kwargs: InvalidResponse())
+
+    try:
+        n8n_client.prepare_qr_url_via_n8n("https://example.com")
+    except n8n_client.N8nWorkflowError as exc:
+        assert "TypeError" in str(exc)
+    else:
+        raise AssertionError("Geçersiz QR workflow yanıtı kabul edilmemeliydi")

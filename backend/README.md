@@ -53,6 +53,9 @@ Temel endpoint'ler:
 - `GET /health`
 - `POST /analyze` — gövde: `{"url": "https://example.com"}`
 - `POST /analyze-qr` — `multipart/form-data` içinde `file` alanıyla PNG/JPEG/WebP QR görseli
+
+`N8N_QR_ENABLED=true` olduğunda QR'dan çıkarılan URL önce Sprint 3 QR webhook'unda
+doğrulanır, ardından mevcut URL analiz akışına yönlendirilir.
 - `POST /analyze-text` — gövde: `{"text": "Acil, hesabınızı doğrulayın."}`
 - `GET /analyses?limit=50`
 

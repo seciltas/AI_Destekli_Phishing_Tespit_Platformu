@@ -36,6 +36,20 @@ Webhook
   → Respond to Webhook
 ```
 
+Sprint 3 QR akışı:
+
+```text
+QR Webhook
+  → Validate QR URL
+  → Return Validated URL
+  → FastAPI mevcut URL analizi
+  → Sprint 1 URL workflow'u
+```
+
+QR görseli güvenlik ve performans nedeniyle FastAPI/OpenCV tarafında çözülür. n8n,
+çıkarılan URL'yi gizli anahtar ve HTTP(S) kurallarıyla doğrular; FastAPI daha sonra aynı
+URL'yi mevcut Sprint 1 analiz zincirine verir.
+
 Bu workflow mesajın içindeki en fazla 10 HTTP(S) adresini VirusTotal ile kontrol eder.
 Ardından mesajı ve URL sonuçlarını FastAPI'deki metin risk motoruna iletir. OpenAI
 kullanılamazsa anahtar kelime tabanlı analiz devam eder.
@@ -100,6 +114,9 @@ Workflow otomatik import edilmemişse:
 SMS/e-posta workflow'u için aynı adımları
 `workflows/sprint-2-text-analysis.json` dosyasıyla tekrarlayın.
 
+QR workflow'u için `workflows/sprint-3-qr-analysis.json` dosyasını import edip
+**Publish** düğmesine basın.
+
 Bu bilgisayarda workflow daha önce CLI ile import edilip yayınlandı.
 
 ## Üç farklı URL kavramı
@@ -120,11 +137,19 @@ SMS/e-posta production webhook adresi:
 http://localhost:5678/webhook/phishing-text-analysis
 ```
 
+QR production webhook adresi:
+
+```text
+http://localhost:5678/webhook/phishing-qr-analysis
+```
+
 Backend `.env` ayarları:
 
 ```env
 N8N_TEXT_ENABLED=true
 N8N_TEXT_WEBHOOK_URL=http://localhost:5678/webhook/phishing-text-analysis
+N8N_QR_ENABLED=true
+N8N_QR_WEBHOOK_URL=http://localhost:5678/webhook/phishing-qr-analysis
 ```
 
 ## Tüm projeyi çalıştırma
