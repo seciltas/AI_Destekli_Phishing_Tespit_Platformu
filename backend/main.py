@@ -2,9 +2,10 @@ import os
 import secrets
 from typing import Any, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from analyzer import (
     CollectedSignals,
@@ -45,9 +46,17 @@ from n8n_client import (
     analyze_text_via_n8n,
     collect_signals_via_n8n,
     n8n_is_enabled,
+    n8n_qr_is_enabled,
     n8n_text_is_enabled,
+    prepare_qr_url_via_n8n,
 )
 from repository import list_analyses, save_analysis
+from qr_analyzer import (
+    ALLOWED_QR_CONTENT_TYPES,
+    MAX_QR_IMAGE_BYTES,
+    QRDecodeError,
+    decode_qr_url,
+)
 from text_analyzer import analyze_text_message
 from telegram_notifier import notify_high_risk_analysis, notify_high_risk_text_analysis
 
@@ -100,6 +109,7 @@ def health() -> HealthResponse:
         database_connected=database_connected,
         n8n_enabled=n8n_is_enabled(),
         n8n_text_enabled=n8n_text_is_enabled(),
+        n8n_qr_enabled=n8n_qr_is_enabled(),
     )
 
 
@@ -303,6 +313,32 @@ def analyze(payload: AnalyzeRequest) -> AnalysisResult:
         ai_explanation=signals.ai_explanation,
         created_at=analysis_row.get("created_at"),
     )
+
+
+@app.post(
+    "/analyze-qr",
+    response_model=AnalysisResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def analyze_qr(file: UploadFile = File(...)) -> AnalysisResult:
+    if file.content_type not in ALLOWED_QR_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail="Yalnızca PNG, JPEG veya WebP QR görselleri yüklenebilir.",
+        )
+    image_bytes = await file.read(MAX_QR_IMAGE_BYTES + 1)
+    try:
+        url = decode_qr_url(image_bytes)
+    except QRDecodeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if n8n_qr_is_enabled():
+        try:
+            url = prepare_qr_url_via_n8n(url)
+        except N8nConfigurationError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except N8nWorkflowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return await run_in_threadpool(analyze, AnalyzeRequest(url=url))
 
 
 @app.get("/analyses")

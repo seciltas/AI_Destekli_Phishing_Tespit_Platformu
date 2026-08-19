@@ -22,6 +22,39 @@ def n8n_text_is_enabled() -> bool:
     return os.getenv("N8N_TEXT_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
 
 
+def n8n_qr_is_enabled() -> bool:
+    return os.getenv("N8N_QR_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+
+
+def prepare_qr_url_via_n8n(url: str) -> str:
+    webhook_url = os.getenv("N8N_QR_WEBHOOK_URL", "").strip()
+    shared_secret = os.getenv("N8N_SHARED_SECRET", "").strip()
+    if not webhook_url or not shared_secret:
+        raise N8nConfigurationError(
+            "N8N_QR_WEBHOOK_URL ve N8N_SHARED_SECRET backend/.env içinde tanımlanmalı."
+        )
+    try:
+        response = httpx.post(
+            webhook_url,
+            params={"url": url},
+            json={"url": url, "source": "qr"},
+            headers={"X-N8N-Secret": shared_secret},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        prepared_url = data.get("url") if isinstance(data, dict) else None
+        if not isinstance(prepared_url, str) or not prepared_url.strip():
+            raise TypeError("n8n QR workflow geçerli URL döndürmedi")
+        return prepared_url.strip()
+    except httpx.TimeoutException as exc:
+        raise N8nWorkflowError("n8n QR workflow zaman aşımına uğradı.") from exc
+    except (httpx.HTTPError, TypeError, ValueError) as exc:
+        raise N8nWorkflowError(
+            f"n8n QR workflow çağrısı başarısız: {type(exc).__name__}"
+        ) from exc
+
+
 def collect_signals_via_n8n(url: str, domain: str) -> CollectedSignals:
     webhook_url = os.getenv("N8N_WEBHOOK_URL", "").strip()
     shared_secret = os.getenv("N8N_SHARED_SECRET", "").strip()

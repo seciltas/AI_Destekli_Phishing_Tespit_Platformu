@@ -14,6 +14,7 @@ def test_health_reports_missing_database_configuration(monkeypatch):
     monkeypatch.setattr(main, "get_database_url", missing_database)
     monkeypatch.setattr(main, "n8n_is_enabled", lambda: False)
     monkeypatch.setattr(main, "n8n_text_is_enabled", lambda: False)
+    monkeypatch.setattr(main, "n8n_qr_is_enabled", lambda: False)
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {
@@ -22,6 +23,7 @@ def test_health_reports_missing_database_configuration(monkeypatch):
         "database_connected": False,
         "n8n_enabled": False,
         "n8n_text_enabled": False,
+        "n8n_qr_enabled": False,
     }
 
 
@@ -59,6 +61,76 @@ def test_analyze_rejects_invalid_url(monkeypatch):
     response = client.post("/analyze", json={"url": "invalid"})
     assert response.status_code == 400
     assert response.json() == {"detail": "Geçersiz URL"}
+
+
+def test_analyze_qr_decodes_and_uses_existing_url_flow(monkeypatch):
+    monkeypatch.setattr(main, "n8n_qr_is_enabled", lambda: False)
+    monkeypatch.setattr(main, "decode_qr_url", lambda _: "https://example.com")
+    monkeypatch.setattr(
+        main,
+        "analyze",
+        lambda payload: main.AnalysisResult(
+            id=12,
+            url=payload.url,
+            domain="example.com",
+            risk=0,
+            status="safe",
+            reasons=["Belirgin bir risk sinyali bulunamadı"],
+        ),
+    )
+
+    response = client.post(
+        "/analyze-qr",
+        files={"file": ("qr.png", b"image-data", "image/png")},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["url"] == "https://example.com"
+
+
+def test_analyze_qr_rejects_unsupported_file_type():
+    response = client.post(
+        "/analyze-qr",
+        files={"file": ("qr.svg", b"<svg />", "image/svg+xml")},
+    )
+
+    assert response.status_code == 415
+
+
+def test_analyze_qr_routes_decoded_url_through_n8n(monkeypatch):
+    monkeypatch.setattr(main, "decode_qr_url", lambda _: "https://example.com/from-qr")
+    monkeypatch.setattr(main, "n8n_qr_is_enabled", lambda: True)
+    monkeypatch.setattr(
+        main,
+        "prepare_qr_url_via_n8n",
+        lambda url: url.replace("/from-qr", "/validated"),
+    )
+    captured = {}
+
+    def fake_analyze(payload):
+        captured["url"] = payload.url
+        return main.AnalysisResult(
+            id=13,
+            url=payload.url,
+            domain="example.com",
+            risk=0,
+            status="safe",
+            reasons=["Belirgin bir risk sinyali bulunamadı"],
+        )
+
+    monkeypatch.setattr(
+        main,
+        "analyze",
+        fake_analyze,
+    )
+
+    response = client.post(
+        "/analyze-qr",
+        files={"file": ("qr.png", b"image-data", "image/png")},
+    )
+
+    assert response.status_code == 201
+    assert captured["url"] == "https://example.com/validated"
 
 
 def test_analyze_sends_telegram_notification_above_80(monkeypatch):

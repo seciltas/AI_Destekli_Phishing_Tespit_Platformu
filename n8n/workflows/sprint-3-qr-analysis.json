@@ -1,0 +1,10 @@
+{
+  "id":"sprint3QrAnalysis","name":"Sprint 3 - QR Phishing Analysis",
+  "nodes":[
+    {"parameters":{"httpMethod":"POST","path":"phishing-qr-analysis","responseMode":"responseNode","options":{}},"id":"8f412a80-5928-41ab-a26e-22af920cda51","name":"QR Webhook","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[-360,120],"webhookId":"cb678ad0-46ae-4384-b47f-9aa8ba73e838"},
+    {"parameters":{"jsCode":"const request=$input.first().json;\nconst provided=request.headers?.['x-n8n-secret'];\nif(!provided||provided!==$env.N8N_SHARED_SECRET) throw new Error('Unauthorized webhook request');\nconst rawUrl=String(request.query?.url??request.body?.url??'').trim();\nconst match=rawUrl.match(/^https?:\\/\\/([^\\/?#]+)(?:[\\/?#]|$)/i);\nif(!match||rawUrl.length>2048) throw new Error('QR URL must be a valid HTTP(S) address');\nconst domain=match[1].split(':')[0].toLowerCase();\nif(!domain||domain.length>253) throw new Error('QR URL hostname is invalid');\nreturn [{json:{url:rawUrl,domain,source:'qr',validated_at:new Date().toISOString()}}];"},"id":"6bfb7bb5-5aa3-4c60-8465-6d927b5a6458","name":"Validate QR URL","type":"n8n-nodes-base.code","typeVersion":2,"position":[-100,120]},
+    {"parameters":{"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},"id":"c0881ee5-9009-4b6d-9b28-1d0b22dba879","name":"Return Validated URL","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.4,"position":[160,120]}
+  ],
+  "pinData":{},"connections":{"QR Webhook":{"main":[[{"node":"Validate QR URL","type":"main","index":0}]]},"Validate QR URL":{"main":[[{"node":"Return Validated URL","type":"main","index":0}]]}},
+  "active":false,"settings":{"executionOrder":"v1","executionTimeout":30},"versionId":"89c7c346-fd32-4c62-8748-2159b72c4056","meta":{"templateCredsSetupCompleted":true},"tags":[]
+}

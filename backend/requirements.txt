@@ -6,3 +6,5 @@ pydantic==2.11.7
 python-whois==0.9.5
 dnspython==2.7.0
 httpx==0.28.1
+opencv-python-headless==4.12.0.88
+python-multipart==0.0.20
